@@ -56,33 +56,73 @@
 
             <h3 class="section-label">Today's Meals</h3>
             <div id="meals-list" class="meals-container">
-                <p class="empty-state">No meals logged today. Tap + to add one!</p>
+                <p class="empty-state">No meals logged today. Tap Log to add one!</p>
             </div>
         </section>
 
         <!-- LOG FOOD VIEW -->
         <section id="view-log" class="view hidden">
+
+            <!-- FOOD SEARCH — no API key, works offline -->
             <div class="card">
-                <h2>Log a Meal</h2>
-                <p>Snap a photo and AI will estimate calories &amp; macros.</p>
+                <h2>Search Food</h2>
+                <p class="hint">300+ foods including Indian cuisine — works offline, no API key needed.</p>
+
+                <div class="search-wrapper">
+                    <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input type="text" id="food-search-input" placeholder="roti, biryani, apple, chicken…" autocomplete="off" spellcheck="false">
+                    <div id="food-search-results" class="food-dropdown hidden"></div>
+                </div>
+
+                <div id="food-confirm-panel" class="food-confirm hidden">
+                    <div class="confirm-header">
+                        <span id="confirm-food-name" class="confirm-name"></span>
+                        <span id="confirm-food-cal" class="confirm-cal"></span>
+                    </div>
+                    <div id="confirm-food-macros" class="confirm-macros"></div>
+                    <div class="confirm-srv-row">Serving: <span id="confirm-srv-label" class="confirm-srv"></span></div>
+                    <div class="qty-row">
+                        <span class="qty-label">Servings:</span>
+                        <div class="qty-controls">
+                            <button class="qty-btn" id="qty-minus">−</button>
+                            <input type="number" id="confirm-qty" value="1" min="0.5" max="20" step="0.5">
+                            <button class="qty-btn" id="qty-plus">+</button>
+                        </div>
+                    </div>
+                    <div class="btn-row">
+                        <button id="confirm-add-btn" class="primary-btn">Add to Log</button>
+                        <button id="confirm-cancel-btn" class="secondary-btn">Cancel</button>
+                    </div>
+                </div>
+
+                <button id="search-online-btn" class="text-link-btn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                    Search online (Open Food Facts — packaged foods)
+                </button>
+            </div>
+
+            <div class="divider"><span>OR</span></div>
+
+            <!-- CAMERA / GALLERY — AI analysis (Gemini, optional) -->
+            <div class="card">
+                <h2>Snap or Upload a Photo</h2>
+                <p class="hint">AI scans your photo and estimates calories &amp; macros.</p>
 
                 <label for="camera-input" class="camera-button">
                     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="4"/><path d="M20 7h-3.3l-1.5-2H8.8L7.3 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
-                    Open Camera / Gallery
+                    Open Camera or Gallery
                 </label>
-                <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden">
+                <!-- No capture attribute: Android shows chooser with both camera AND gallery -->
+                <input type="file" id="camera-input" accept="image/*" class="hidden">
 
                 <div id="image-preview-container" class="hidden">
-                    <img id="image-preview" src="" alt="Meal preview">
-                    <button id="analyze-btn" class="primary-btn">Analyze Food</button>
+                    <img id="image-preview" src="" alt="Food preview">
+                    <button id="analyze-btn" class="primary-btn">Analyze with AI</button>
                 </div>
 
-                <div class="divider"><span>OR</span></div>
-
-                <h3 class="sub-heading">Describe Your Meal</h3>
-                <p class="hint">AI will estimate nutrition from your description.</p>
-                <input type="text" id="manual-food-name" placeholder="E.g., 2 scrambled eggs and toast">
-                <button id="manual-log-btn" class="secondary-btn">Log &amp; Estimate Nutrition</button>
+                <p class="hint" style="margin-top:10px;">
+                    Requires a free Gemini API key (add in Config tab). Text search above works without any key.
+                </p>
             </div>
         </section>
 
@@ -115,6 +155,7 @@
         <section id="view-settings" class="view hidden">
             <div class="card">
                 <h2>Gemini API Key</h2>
+                <p class="hint">Only required for AI photo analysis. Text food search works without it.</p>
                 <div class="info-box">
                     <p><strong>Get a free Google Gemini API key:</strong></p>
                     <ol>
@@ -125,7 +166,7 @@
                     </ol>
                     <p class="free-badge">✓ Free tier: 15 requests/min — no payment needed</p>
                 </div>
-                <input type="password" id="api-key-input" placeholder="AIzaSy...">
+                <input type="password" id="api-key-input" placeholder="AIzaSy…">
                 <div class="btn-row">
                     <button id="save-settings-btn" class="primary-btn">Save Key</button>
                     <button id="test-key-btn" class="secondary-btn">Test Key</button>
@@ -178,6 +219,7 @@
     </nav>
 
     <script src="db.js"></script>
+    <script src="foods.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
