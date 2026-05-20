@@ -99,6 +99,69 @@
             </div>
         </section>
 
+        <!-- SETTINGS VIEW (UPDATED FOR GEMINI) -->
+        <section id="view-settings" class="view hidden">
+            <div class="card">
+                <h2>Settings</h2>
+                <p>Enter your Free Google Gemini API Key. Stored securely on your device.</p>
+                <input type="password" id="api-key-input" placeholder="AIzaSy...">
+                <button id="save-settings-btn" class="primary-btn">Save Key</button>
+                <p id="settings-status" class="status-msg"></p>
+            </div>
+        </section>
+    </main>
+
+    <!-- BOTTOM NAVIGATION -->
+    <nav class="bottom-nav">
+        <button class="nav-btn active" data-target="view-dashboard">
+            <span class="icon">📊</span>
+            <span>Today</span>
+        </button>
+        <button class="nav-btn" data-target="view-log">
+            <span class="icon log-icon">➕</span>
+            <span>Log</span>
+        </button>
+        <button class="nav-btn" data-target="view-summary">
+            <span class="icon">📈</span>
+            <span>Week</span>
+        </button>
+        <button class="nav-btn" data-target="view-settings">
+            <span class="icon">⚙️</span>
+            <span>Config</span>
+        </button>
+    </nav>
+
+    <!-- Scripts initialized in order -->
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
+        <!-- SUMMARY VIEW -->
+        <section id="view-summary" class="view hidden">
+            <div class="card">
+                <h2>Weekly Averages</h2>
+                <div class="summary-stats">
+                    <div class="stat-box">
+                        <span class="stat-num">0</span>
+                        <span class="stat-label">Avg Cals</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">0g</span>
+                        <span class="stat-label">Avg Protein</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">0g</span>
+                        <span class="stat-label">Avg Carbs</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">0g</span>
+                        <span class="stat-label">Avg Fats</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <!-- SETTINGS VIEW -->
         <section id="view-settings" class="view hidden">
             <div class="card">
