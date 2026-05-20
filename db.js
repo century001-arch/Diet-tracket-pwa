@@ -8,12 +8,13 @@ function initDB() {
         request.onerror = (e) => reject(e.target.error);
         request.onsuccess = (e) => { db = e.target.result; resolve(db); };
         request.onupgradeneeded = (e) => {
-            const dbInstance = e.target.result;
-            if (!dbInstance.objectStoreNames.contains('meals')) {
-                dbInstance.createObjectStore('meals', { keyPath: 'id', autoIncrement: true }).createIndex('date', 'date', { unique: false });
+            const d = e.target.result;
+            if (!d.objectStoreNames.contains('meals')) {
+                d.createObjectStore('meals', { keyPath: 'id', autoIncrement: true })
+                 .createIndex('date', 'date', { unique: false });
             }
-            if (!dbInstance.objectStoreNames.contains('settings')) {
-                dbInstance.createObjectStore('settings', { keyPath: 'key' });
+            if (!d.objectStoreNames.contains('settings')) {
+                d.createObjectStore('settings', { keyPath: 'key' });
             }
         };
     });
@@ -22,26 +23,40 @@ function initDB() {
 function saveMeal(meal) {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(['meals'], 'readwrite');
+        tx.onerror = (e) => reject(e.target.error);
         tx.objectStore('meals').put(meal).onsuccess = (e) => resolve(e.target.result);
+    });
+}
+
+function deleteMeal(id) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(['meals'], 'readwrite');
+        tx.onerror = (e) => reject(e.target.error);
+        tx.objectStore('meals').delete(id).onsuccess = () => resolve();
     });
 }
 
 function getMealsByDate(dateString) {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(['meals'], 'readonly');
+        tx.onerror = (e) => reject(e.target.error);
         tx.objectStore('meals').index('date').getAll(dateString).onsuccess = (e) => resolve(e.target.result);
     });
 }
 
 function saveSetting(key, value) {
     return new Promise((resolve, reject) => {
-        db.transaction(['settings'], 'readwrite').objectStore('settings').put({ key, value }).onsuccess = () => resolve();
+        const tx = db.transaction(['settings'], 'readwrite');
+        tx.onerror = (e) => reject(e.target.error);
+        tx.objectStore('settings').put({ key, value }).onsuccess = () => resolve();
     });
 }
 
 function getSetting(key) {
     return new Promise((resolve, reject) => {
-        db.transaction(['settings'], 'readonly').objectStore('settings').get(key).onsuccess = (e) => {
+        const tx = db.transaction(['settings'], 'readonly');
+        tx.onerror = (e) => reject(e.target.error);
+        tx.objectStore('settings').get(key).onsuccess = (e) => {
             resolve(e.target.result ? e.target.result.value : null);
         };
     });
