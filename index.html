@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>NutriSnap</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="style.css">
+    <meta name="theme-color" content="#00B0B9">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+<body>
+    <header class="app-header">
+        <h1 id="header-title">Today's Overview</h1>
+    </header>
+
+    <main class="app-content">
+        <!-- DASHBOARD VIEW -->
+        <section id="view-dashboard" class="view active">
+            <div class="card circular-card">
+                <div class="progress-ring" id="calorie-ring">
+                    <div class="ring-content">
+                        <span id="calories-consumed">0</span>
+                        <small>cals eaten</small>
+                    </div>
+                </div>
+                <div class="macro-bars">
+                    <div class="macro-row">
+                        <span>Protein</span>
+                        <div class="bar-bg"><div class="bar-fill protein-fill" style="width: 0%"></div></div>
+                        <span class="macro-value">0g</span>
+                    </div>
+                    <div class="macro-row">
+                        <span>Carbs</span>
+                        <div class="bar-bg"><div class="bar-fill carbs-fill" style="width: 0%"></div></div>
+                        <span class="macro-value">0g</span>
+                    </div>
+                    <div class="macro-row">
+                        <span>Fats</span>
+                        <div class="bar-bg"><div class="bar-fill fats-fill" style="width: 0%"></div></div>
+                        <span class="macro-value">0g</span>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>Today's Meals</h3>
+            <div id="meals-list" class="meals-container">
+                <p class="empty-state">No meals logged today. Tap + to add one!</p>
+            </div>
+        </section>
+
+        <!-- LOG FOOD VIEW -->
+        <section id="view-log" class="view hidden">
+            <div class="card">
+                <h2>Log a Meal</h2>
+                <p>Snap a photo of your food, and AI will estimate the calories and macros.</p>
+                
+                <label for="camera-input" class="camera-button">
+                    📸 Open Camera
+                </label>
+                <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden">
+                
+                <div id="image-preview-container" class="hidden">
+                    <img id="image-preview" src="" alt="Meal preview">
+                    <button id="analyze-btn" class="primary-btn">Analyze Food</button>
+                </div>
+
+                <div class="divider" style="text-align: center; margin: 15px 0; color: #666;"><span>OR</span></div>
+                
+                <h3>Manual Entry</h3>
+                <input type="text" id="manual-food-name" placeholder="E.g., 2 Scrambled Eggs and Toast">
+                <button id="manual-log-btn" class="secondary-btn">Log Manually</button>
+            </div>
+        </section>
+
+        <!-- SUMMARY VIEW -->
+        <section id="view-summary" class="view hidden">
+            <div class="card">
+                <h2>Weekly Averages</h2>
+                <div class="summary-stats">
+                    <div class="stat-box">
+                        <span class="stat-num">0</span>
+                        <span class="stat-label">Avg Cals</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">0g</span>
+                        <span class="stat-label">Avg Protein</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">0g</span>
+                        <span class="stat-label">Avg Carbs</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num">0g</span>
+                        <span class="stat-label">Avg Fats</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SETTINGS VIEW -->
+        <section id="view-settings" class="view hidden">
+            <div class="card">
+                <h2>Settings</h2>
+                <p>Enter your OpenAI API Key. stored securely on your device.</p>
+                <input type="password" id="api-key-input" placeholder="sk-...">
+                <button id="save-settings-btn" class="primary-btn">Save Key</button>
+                <p id="settings-status" class="status-msg"></p>
+            </div>
+        </section>
+    </main>
+
+    <!-- BOTTOM NAVIGATION -->
+    <nav class="bottom-nav">
+        <button class="nav-btn active" data-target="view-dashboard">
+            <span class="icon">📊</span>
+            <span>Today</span>
+        </button>
+        <button class="nav-btn" data-target="view-log">
+            <span class="icon log-icon">➕</span>
+            <span>Log</span>
+        </button>
+        <button class="nav-btn" data-target="view-summary">
+            <span class="icon">📈</span>
+            <span>Week</span>
+        </button>
+        <button class="nav-btn" data-target="view-settings">
+            <span class="icon">⚙️</span>
+            <span>Config</span>
+        </button>
+    </nav>
+
+    <!-- Scripts initialized in order -->
+    <script src="db.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
