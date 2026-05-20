@@ -8,7 +8,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         await initDB();
         registerServiceWorker();
         setupNavigation();
-        setupCameraAndLogging();
+        setupFoodSearch();
+        setupCamera();
         setupSettings();
         updateDashboard();
     } catch (err) { console.error('App init error:', err); }
@@ -55,6 +56,226 @@ async function getGoals() {
     };
 }
 
+// ── FOOD SEARCH (local database — no API or internet required) ────────────────
+
+function setupFoodSearch() {
+    const searchInput   = document.getElementById('food-search-input');
+    const dropdown      = document.getElementById('food-search-results');
+    const confirmPanel  = document.getElementById('food-confirm-panel');
+    const confirmName   = document.getElementById('confirm-food-name');
+    const confirmCal    = document.getElementById('confirm-food-cal');
+    const confirmMacros = document.getElementById('confirm-food-macros');
+    const confirmSrv    = document.getElementById('confirm-srv-label');
+    const qtyInput      = document.getElementById('confirm-qty');
+    const qtyMinus      = document.getElementById('qty-minus');
+    const qtyPlus       = document.getElementById('qty-plus');
+    const addBtn        = document.getElementById('confirm-add-btn');
+    const cancelBtn     = document.getElementById('confirm-cancel-btn');
+    const onlineBtn     = document.getElementById('search-online-btn');
+
+    let selectedFood = null;
+    let debounce = null;
+
+    searchInput.addEventListener('input', () => {
+        clearTimeout(debounce);
+        debounce = setTimeout(() => {
+            const q = searchInput.value.trim();
+            if (q.length < 2) { hideDropdown(); return; }
+            renderDropdown(searchFoods(q));
+        }, 150);
+    });
+
+    searchInput.addEventListener('focus', () => {
+        const q = searchInput.value.trim();
+        if (q.length >= 2) renderDropdown(searchFoods(q));
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.search-wrapper')) hideDropdown();
+    });
+
+    function renderDropdown(foods) {
+        dropdown.innerHTML = '';
+        if (foods.length === 0) {
+            const msg = document.createElement('div');
+            msg.className = 'food-no-result';
+            msg.textContent = 'No results — try "Search Online" below for packaged or rare foods.';
+            dropdown.appendChild(msg);
+        } else {
+            foods.forEach(food => {
+                const item = document.createElement('div');
+                item.className = 'food-result-item';
+                const nameEl = document.createElement('span');
+                nameEl.className = 'food-result-name';
+                nameEl.textContent = food.n;
+                const rightEl = document.createElement('span');
+                rightEl.className = 'food-result-right';
+                rightEl.innerHTML = `<b>${food.c}</b> cal<br><small>${food.s}</small>`;
+                item.appendChild(nameEl);
+                item.appendChild(rightEl);
+                item.addEventListener('mousedown', e => { e.preventDefault(); selectFood(food); });
+                dropdown.appendChild(item);
+            });
+        }
+        dropdown.classList.remove('hidden');
+    }
+
+    function hideDropdown() { dropdown.classList.add('hidden'); }
+
+    function selectFood(food) {
+        selectedFood = food;
+        searchInput.value = food.n;
+        hideDropdown();
+        confirmName.textContent = food.n;
+        confirmCal.textContent = `${food.c} cal per serving`;
+        confirmMacros.textContent = `Protein: ${food.p}g  •  Carbs: ${food.cb}g  •  Fat: ${food.f}g`;
+        confirmSrv.textContent = food.s;
+        qtyInput.value = '1';
+        confirmPanel.classList.remove('hidden');
+        confirmPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+
+    qtyMinus.addEventListener('click', () => {
+        const v = parseFloat(qtyInput.value) || 1;
+        qtyInput.value = Math.max(0.5, parseFloat((v - 0.5).toFixed(1)));
+    });
+    qtyPlus.addEventListener('click', () => {
+        const v = parseFloat(qtyInput.value) || 1;
+        qtyInput.value = Math.min(20, parseFloat((v + 0.5).toFixed(1)));
+    });
+
+    addBtn.addEventListener('click', async () => {
+        if (!selectedFood) return;
+        const qty = Math.max(0.5, parseFloat(qtyInput.value) || 1);
+        await saveMeal({
+            date:     getTodayString(),
+            name:     qty === 1 ? selectedFood.n : `${selectedFood.n} ×${qty}`,
+            calories: Math.round(selectedFood.c * qty),
+            protein:  Math.round(selectedFood.p * qty),
+            carbs:    Math.round(selectedFood.cb * qty),
+            fats:     Math.round(selectedFood.f * qty),
+            image:    null,
+            status:   'database'
+        });
+        resetSearch();
+        navigateTo('view-dashboard');
+    });
+
+    cancelBtn.addEventListener('click', resetSearch);
+
+    function resetSearch() {
+        selectedFood = null;
+        searchInput.value = '';
+        confirmPanel.classList.add('hidden');
+        hideDropdown();
+    }
+
+    // Online fallback — Open Food Facts (completely free, no API key)
+    onlineBtn.addEventListener('click', async () => {
+        const q = searchInput.value.trim();
+        if (!q) { searchInput.focus(); return; }
+        const orig = onlineBtn.textContent;
+        onlineBtn.textContent = 'Searching…';
+        onlineBtn.disabled = true;
+        try {
+            const results = await searchOpenFoodFacts(q);
+            if (results.length === 0) {
+                alert(`No online results found for "${q}".\nTry a simpler search term.`);
+            } else {
+                renderDropdown(results);
+            }
+        } catch {
+            alert('Online search failed. Check your internet connection and try again.');
+        } finally {
+            onlineBtn.textContent = orig;
+            onlineBtn.disabled = false;
+        }
+    });
+}
+
+async function searchOpenFoodFacts(query) {
+    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=12&fields=product_name,nutriments,serving_size`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+    const data = await res.json();
+    return (data.products || [])
+        .filter(p => p.product_name && p.nutriments &&
+            (p.nutriments['energy-kcal_100g'] || p.nutriments['energy-kcal_serving']))
+        .map(p => {
+            const n = p.nutriments;
+            const srv = n['energy-kcal_serving'] != null;
+            return {
+                n:  p.product_name.replace(/,\s*$/, '').slice(0, 70),
+                c:  Math.round(srv ? (n['energy-kcal_serving'] || 0) : (n['energy-kcal_100g'] || 0)),
+                p:  Math.round(srv ? (n['proteins_serving'] || 0) : (n['proteins_100g'] || 0)),
+                cb: Math.round(srv ? (n['carbohydrates_serving'] || 0) : (n['carbohydrates_100g'] || 0)),
+                f:  Math.round(srv ? (n['fat_serving'] || 0) : (n['fat_100g'] || 0)),
+                s:  p.serving_size ? p.serving_size.slice(0, 30) : (srv ? '1 serving' : '100g')
+            };
+        })
+        .filter(f => f.c > 0)
+        .slice(0, 8);
+}
+
+// ── CAMERA & AI PHOTO ANALYSIS (Gemini — optional, free) ─────────────────────
+
+function setupCamera() {
+    const cameraInput      = document.getElementById('camera-input');
+    const imagePreview     = document.getElementById('image-preview');
+    const previewContainer = document.getElementById('image-preview-container');
+    const analyzeBtn       = document.getElementById('analyze-btn');
+
+    cameraInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_W = 600;
+                const scale = Math.min(MAX_W / img.width, 1);
+                canvas.width  = img.width  * scale;
+                canvas.height = img.height * scale;
+                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                currentImageBase64 = canvas.toDataURL('image/jpeg', 0.7);
+                imagePreview.src = currentImageBase64;
+                previewContainer.classList.remove('hidden');
+                analyzeBtn.textContent = 'Analyze with AI';
+                analyzeBtn.disabled = false;
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    analyzeBtn.addEventListener('click', async () => {
+        const apiKey = await getSetting('gemini_key');
+        if (!apiKey) {
+            alert('AI photo analysis requires a free Gemini API key.\n\nGo to Config tab → enter your key → Save Key.\nGet a free key at: aistudio.google.com\n\n(Text search in the section above works without any API key.)');
+            return;
+        }
+        analyzeBtn.textContent = 'Analyzing…';
+        analyzeBtn.disabled = true;
+        try {
+            const base64Data = currentImageBase64.split(',')[1];
+            const prompt = 'You are a nutritionist. Analyze this food image and estimate nutritional content. Return ONLY valid JSON: {"name":"Food Name","calories":0,"protein":0,"carbs":0,"fats":0}. All numeric values must be integers in grams or kcal.';
+            const raw = await callGemini(apiKey, prompt, base64Data);
+            await saveMeal({ date: getTodayString(), ...sanitizeMeal(raw, 'Unknown Food'), image: currentImageBase64, status: 'ai-analyzed' });
+            currentImageBase64 = null;
+            previewContainer.classList.add('hidden');
+            cameraInput.value = '';
+            navigateTo('view-dashboard');
+        } catch (err) {
+            console.error('AI analysis error:', err);
+            alert(`AI analysis failed: ${err.message}\n\nTip: Use "Test Key" in Config to verify your API key.`);
+            analyzeBtn.textContent = 'Analyze with AI';
+            analyzeBtn.disabled = false;
+        }
+    });
+}
+
+// ── GEMINI (used only for AI photo analysis) ──────────────────────────────────
+
 async function callGemini(apiKey, prompt, imageBase64 = null) {
     const parts = [{ text: prompt }];
     if (imageBase64) parts.push({ inline_data: { mime_type: 'image/jpeg', data: imageBase64 } });
@@ -62,7 +283,6 @@ async function callGemini(apiKey, prompt, imageBase64 = null) {
         contents: [{ parts }],
         generationConfig: { responseMimeType: 'application/json' }
     });
-
     const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
     let lastError;
     for (const model of models) {
@@ -93,91 +313,7 @@ function sanitizeMeal(raw, fallbackName) {
     };
 }
 
-function setupCameraAndLogging() {
-    const cameraInput       = document.getElementById('camera-input');
-    const imagePreview      = document.getElementById('image-preview');
-    const previewContainer  = document.getElementById('image-preview-container');
-    const manualFoodInput   = document.getElementById('manual-food-name');
-    const analyzeBtn        = document.getElementById('analyze-btn');
-    const manualLogBtn      = document.getElementById('manual-log-btn');
-
-    cameraInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const MAX_W = 600;
-                const scale = Math.min(MAX_W / img.width, 1);
-                canvas.width  = img.width  * scale;
-                canvas.height = img.height * scale;
-                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                currentImageBase64 = canvas.toDataURL('image/jpeg', 0.7);
-                imagePreview.src = currentImageBase64;
-                previewContainer.classList.remove('hidden');
-                analyzeBtn.textContent = 'Analyze Food';
-                analyzeBtn.disabled = false;
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-
-    analyzeBtn.addEventListener('click', async () => {
-        const apiKey = await getSetting('gemini_key');
-        if (!apiKey) {
-            alert('Please save your free Google Gemini API key in the Config tab first.\n\nGet one free at: aistudio.google.com');
-            return;
-        }
-        analyzeBtn.textContent = 'Analyzing…';
-        analyzeBtn.disabled = true;
-        try {
-            const base64Data = currentImageBase64.split(',')[1];
-            const prompt = 'You are a nutritionist. Analyze this food image and estimate nutritional content. Return ONLY valid JSON: {"name":"Food Name","calories":0,"protein":0,"carbs":0,"fats":0}. All numeric values must be integers in grams or kcal.';
-            const raw = await callGemini(apiKey, prompt, base64Data);
-            await saveMeal({ date: getTodayString(), ...sanitizeMeal(raw, 'Unknown Food'), image: currentImageBase64, status: 'analyzed' });
-            currentImageBase64 = null;
-            previewContainer.classList.add('hidden');
-            cameraInput.value = '';
-            navigateTo('view-dashboard');
-        } catch (err) {
-            console.error('Analysis error:', err);
-            alert(`AI analysis failed: ${err.message}\n\nCheck your Gemini API key in Config.`);
-            analyzeBtn.textContent = 'Analyze Food';
-            analyzeBtn.disabled = false;
-        }
-    });
-
-    manualLogBtn.addEventListener('click', async () => {
-        const text = manualFoodInput.value.trim();
-        if (!text) return;
-
-        const apiKey = await getSetting('gemini_key');
-        if (!apiKey) {
-            alert('Please save your Google Gemini API key in the Config tab first.\n\nGet a free key at: aistudio.google.com');
-            return;
-        }
-
-        const orig = manualLogBtn.textContent;
-        manualLogBtn.textContent = 'Estimating…';
-        manualLogBtn.disabled = true;
-        try {
-            const prompt = `You are a nutritionist. Estimate the nutritional content of this meal: "${text.replace(/"/g, '')}". Use typical serving sizes. Return ONLY valid JSON: {"name":"Food Name","calories":0,"protein":0,"carbs":0,"fats":0}. All numeric values must be integers.`;
-            const raw = await callGemini(apiKey, prompt);
-            await saveMeal({ date: getTodayString(), ...sanitizeMeal(raw, text), image: null, status: 'estimated' });
-            manualFoodInput.value = '';
-            navigateTo('view-dashboard');
-        } catch (err) {
-            console.error('Manual entry error:', err);
-            alert(`Could not estimate nutrition:\n${err.message}\n\nTip: Go to Config tab and tap "Test Key" to verify your API key.`);
-        } finally {
-            manualLogBtn.textContent = orig;
-            manualLogBtn.disabled = false;
-        }
-    });
-}
+// ── SETTINGS ──────────────────────────────────────────────────────────────────
 
 function setupSettings() {
     const keyInput  = document.getElementById('api-key-input');
@@ -186,7 +322,6 @@ function setupSettings() {
     const goalKeys  = ['goal_calories', 'goal_protein', 'goal_carbs', 'goal_fats'];
 
     getSetting('gemini_key').then(k => { if (k) keyInput.value = '••••••••••••••••••••'; });
-
     Promise.all(goalKeys.map(k => getSetting(k))).then(vals => {
         vals.forEach((v, i) => { if (v) document.getElementById(goalIds[i]).value = v; });
     });
@@ -210,7 +345,7 @@ function setupSettings() {
         try {
             const result = await callGemini(key, 'Return ONLY this exact JSON: {"name":"test","calories":100,"protein":5,"carbs":10,"fats":3}');
             if (result && result.calories !== undefined) {
-                statusMsg.textContent = '✓ API key is working! Gemini is connected.';
+                statusMsg.textContent = '✓ API key works! AI photo analysis is ready.';
                 statusMsg.style.color = '#34C759';
             } else {
                 throw new Error('Unexpected response format.');
@@ -232,6 +367,8 @@ function setupSettings() {
     });
 }
 
+// ── DASHBOARD ──────────────────────────────────────────────────────────────────
+
 async function updateDashboard() {
     const [meals, goals] = await Promise.all([getMealsByDate(getTodayString()), getGoals()]);
     const container = document.getElementById('meals-list');
@@ -241,7 +378,7 @@ async function updateDashboard() {
     if (meals.length === 0) {
         const empty = document.createElement('p');
         empty.className = 'empty-state';
-        empty.textContent = 'No meals logged today. Tap + to add one!';
+        empty.textContent = 'No meals logged today. Tap Log to add one!';
         container.appendChild(empty);
     } else {
         meals.forEach(m => {
@@ -277,15 +414,12 @@ function createMealCard(m) {
 
     const info = document.createElement('div');
     info.className = 'meal-info';
-
     const name = document.createElement('div');
     name.className = 'meal-name';
     name.textContent = m.name;
-
     const macros = document.createElement('div');
     macros.className = 'meal-macros';
     macros.textContent = `P: ${m.protein}g  C: ${m.carbs}g  F: ${m.fats}g`;
-
     info.appendChild(name);
     info.appendChild(macros);
 
