@@ -20,20 +20,21 @@ function registerServiceWorker() {
     }
 }
 
-function setupNavigation() {
-    navButtons.forEach(btn => {
-        btn.addEventListener('click', () => {
-            const target = btn.getAttribute('data-target');
-            navButtons.forEach(b => b.classList.remove('active'));
-            btn.classList.add('active');
-            views.forEach(v => v.id === target ? v.classList.remove('hidden') : v.classList.add('hidden'));
+function navigateTo(target) {
+    const backBtn = document.getElementById('back-btn');
+    navButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-target') === target));
+    views.forEach(v => v.id === target ? v.classList.remove('hidden') : v.classList.add('hidden'));
+    backBtn.classList.toggle('hidden', target === 'view-dashboard');
 
-            if (target === 'view-dashboard') { headerTitle.textContent = "Today's Overview"; updateDashboard(); }
-            else if (target === 'view-log') headerTitle.textContent = "Log Your Meal";
-            else if (target === 'view-summary') { headerTitle.textContent = "Weekly Trends"; updateWeeklySummary(); }
-            else if (target === 'view-settings') headerTitle.textContent = "Configuration";
-        });
-    });
+    if (target === 'view-dashboard') { headerTitle.textContent = "Today's Overview"; updateDashboard(); }
+    else if (target === 'view-log')      headerTitle.textContent = "Log Your Meal";
+    else if (target === 'view-summary')  { headerTitle.textContent = "Weekly Trends"; updateWeeklySummary(); }
+    else if (target === 'view-settings') headerTitle.textContent = "Configuration";
+}
+
+function setupNavigation() {
+    navButtons.forEach(btn => btn.addEventListener('click', () => navigateTo(btn.getAttribute('data-target'))));
+    document.getElementById('back-btn').addEventListener('click', () => navigateTo('view-dashboard'));
 }
 
 function getTodayString() {
@@ -132,7 +133,7 @@ function setupCameraAndLogging() {
             currentImageBase64 = null;
             previewContainer.classList.add('hidden');
             cameraInput.value = '';
-            document.querySelector('[data-target="view-dashboard"]').click();
+            navigateTo('view-dashboard');
         } catch (err) {
             console.error('Analysis error:', err);
             alert(`AI analysis failed: ${err.message}\n\nCheck your Gemini API key in Config.`);
@@ -165,7 +166,7 @@ function setupCameraAndLogging() {
             await saveMeal({ date: getTodayString(), name: text.slice(0, 120), calories: 0, protein: 0, carbs: 0, fats: 0, image: null, status: 'manual' });
         }
         manualFoodInput.value = '';
-        document.querySelector('[data-target="view-dashboard"]').click();
+        navigateTo('view-dashboard');
     });
 }
 

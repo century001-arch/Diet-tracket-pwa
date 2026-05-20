@@ -7,14 +7,21 @@
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="assets/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Exo+2:wght@300;400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-    <meta name="theme-color" content="#00B0B9">
+    <meta name="theme-color" content="#07071A">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
     <meta name="apple-mobile-web-app-title" content="NutriSnap">
 </head>
 <body>
     <header class="app-header">
+        <button id="back-btn" class="back-btn hidden" aria-label="Back to Today">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Today
+        </button>
         <h1 id="header-title">Today's Overview</h1>
     </header>
 
@@ -47,7 +54,7 @@
                 </div>
             </div>
 
-            <h3>Today's Meals</h3>
+            <h3 class="section-label">Today's Meals</h3>
             <div id="meals-list" class="meals-container">
                 <p class="empty-state">No meals logged today. Tap + to add one!</p>
             </div>
@@ -57,10 +64,11 @@
         <section id="view-log" class="view hidden">
             <div class="card">
                 <h2>Log a Meal</h2>
-                <p>Snap a photo and AI will estimate the calories and macros.</p>
+                <p>Snap a photo and AI will estimate calories &amp; macros.</p>
 
                 <label for="camera-input" class="camera-button">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;margin-right:8px"><circle cx="12" cy="12" r="4"/><path d="M20 7h-3.3l-1.5-2H8.8L7.3 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>Open Camera / Gallery
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="4"/><path d="M20 7h-3.3l-1.5-2H8.8L7.3 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/></svg>
+                    Open Camera / Gallery
                 </label>
                 <input type="file" id="camera-input" accept="image/*" capture="environment" class="hidden">
 
@@ -71,7 +79,7 @@
 
                 <div class="divider"><span>OR</span></div>
 
-                <h3>Describe Your Meal</h3>
+                <h3 class="sub-heading">Describe Your Meal</h3>
                 <p class="hint">AI will estimate nutrition from your description.</p>
                 <input type="text" id="manual-food-name" placeholder="E.g., 2 scrambled eggs and toast">
                 <button id="manual-log-btn" class="secondary-btn">Log &amp; Estimate Nutrition</button>
@@ -115,7 +123,7 @@
                         <li>Click "Get API key" → "Create API key"</li>
                         <li>Copy and paste it below</li>
                     </ol>
-                    <p class="free-badge">Free tier: 15 requests/min — no payment needed</p>
+                    <p class="free-badge">✓ Free tier: 15 requests/min — no payment needed</p>
                 </div>
                 <input type="password" id="api-key-input" placeholder="AIzaSy...">
                 <button id="save-settings-btn" class="primary-btn">Save Key</button>
