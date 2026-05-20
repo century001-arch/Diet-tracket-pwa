@@ -275,6 +275,8 @@ input::placeholder { color: var(--muted); }
 .secondary-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .primary-btn:active  { opacity: 0.78; box-shadow: 0 0 8px rgba(0, 245, 255, 0.3); }
 .secondary-btn:active { background: rgba(0, 245, 255, 0.14); }
+.btn-row { display: flex; gap: 10px; margin-top: 10px; }
+.btn-row .primary-btn, .btn-row .secondary-btn { margin-top: 0; flex: 1; }
 
 .hidden { display: none !important; }
 

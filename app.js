@@ -58,21 +58,29 @@ async function getGoals() {
 async function callGemini(apiKey, prompt, imageBase64 = null) {
     const parts = [{ text: prompt }];
     if (imageBase64) parts.push({ inline_data: { mime_type: 'image/jpeg', data: imageBase64 } });
+    const body = JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: { responseMimeType: 'application/json' }
+    });
 
-    const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-        {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                contents: [{ parts }],
-                generationConfig: { responseMimeType: 'application/json' }
-            })
+    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
+    let lastError;
+    for (const model of models) {
+        const res = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
+        );
+        const data = await res.json();
+        if (data.error) {
+            lastError = new Error(data.error.message);
+            if (data.error.code === 404 || (data.error.status || '').includes('NOT_FOUND')) continue;
+            throw lastError;
         }
-    );
-    const data = await res.json();
-    if (data.error) throw new Error(data.error.message);
-    return JSON.parse(data.candidates[0].content.parts[0].text);
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Empty response from Gemini. Try again.');
+        return JSON.parse(text);
+    }
+    throw lastError;
 }
 
 function sanitizeMeal(raw, fallbackName) {
@@ -147,26 +155,27 @@ function setupCameraAndLogging() {
         if (!text) return;
 
         const apiKey = await getSetting('gemini_key');
-        if (apiKey) {
-            const orig = manualLogBtn.textContent;
-            manualLogBtn.textContent = 'Estimating…';
-            manualLogBtn.disabled = true;
-            try {
-                const prompt = `You are a nutritionist. Estimate the nutritional content of this meal: "${text.replace(/"/g, '')}". Use typical serving sizes. Return ONLY valid JSON: {"name":"Food Name","calories":0,"protein":0,"carbs":0,"fats":0}. All numeric values must be integers.`;
-                const raw = await callGemini(apiKey, prompt);
-                await saveMeal({ date: getTodayString(), ...sanitizeMeal(raw, text), image: null, status: 'estimated' });
-            } catch (err) {
-                console.error('Manual entry error:', err);
-                await saveMeal({ date: getTodayString(), name: text.slice(0, 120), calories: 0, protein: 0, carbs: 0, fats: 0, image: null, status: 'manual' });
-            } finally {
-                manualLogBtn.textContent = orig;
-                manualLogBtn.disabled = false;
-            }
-        } else {
-            await saveMeal({ date: getTodayString(), name: text.slice(0, 120), calories: 0, protein: 0, carbs: 0, fats: 0, image: null, status: 'manual' });
+        if (!apiKey) {
+            alert('Please save your Google Gemini API key in the Config tab first.\n\nGet a free key at: aistudio.google.com');
+            return;
         }
-        manualFoodInput.value = '';
-        navigateTo('view-dashboard');
+
+        const orig = manualLogBtn.textContent;
+        manualLogBtn.textContent = 'Estimating…';
+        manualLogBtn.disabled = true;
+        try {
+            const prompt = `You are a nutritionist. Estimate the nutritional content of this meal: "${text.replace(/"/g, '')}". Use typical serving sizes. Return ONLY valid JSON: {"name":"Food Name","calories":0,"protein":0,"carbs":0,"fats":0}. All numeric values must be integers.`;
+            const raw = await callGemini(apiKey, prompt);
+            await saveMeal({ date: getTodayString(), ...sanitizeMeal(raw, text), image: null, status: 'estimated' });
+            manualFoodInput.value = '';
+            navigateTo('view-dashboard');
+        } catch (err) {
+            console.error('Manual entry error:', err);
+            alert(`Could not estimate nutrition:\n${err.message}\n\nTip: Go to Config tab and tap "Test Key" to verify your API key.`);
+        } finally {
+            manualLogBtn.textContent = orig;
+            manualLogBtn.disabled = false;
+        }
     });
 }
 
@@ -188,6 +197,27 @@ function setupSettings() {
             await saveSetting('gemini_key', key);
             statusMsg.textContent = 'API key saved!';
             statusMsg.style.color = '#34C759';
+        }
+    });
+
+    document.getElementById('test-key-btn').addEventListener('click', async () => {
+        const stored = await getSetting('gemini_key');
+        const typed  = keyInput.value.trim();
+        const key = (typed && !typed.startsWith('••••')) ? typed : stored;
+        if (!key) { statusMsg.textContent = 'Enter and save your API key first.'; statusMsg.style.color = '#FF4060'; return; }
+        statusMsg.textContent = 'Testing connection…';
+        statusMsg.style.color = 'var(--muted)';
+        try {
+            const result = await callGemini(key, 'Return ONLY this exact JSON: {"name":"test","calories":100,"protein":5,"carbs":10,"fats":3}');
+            if (result && result.calories !== undefined) {
+                statusMsg.textContent = '✓ API key is working! Gemini is connected.';
+                statusMsg.style.color = '#34C759';
+            } else {
+                throw new Error('Unexpected response format.');
+            }
+        } catch (err) {
+            statusMsg.textContent = `✗ Failed: ${err.message}`;
+            statusMsg.style.color = '#FF4060';
         }
     });
 
