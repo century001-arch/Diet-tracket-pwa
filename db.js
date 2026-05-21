@@ -107,3 +107,43 @@ function getSetting(key) {
         };
     });
 }
+
+function exportAllData() {
+    return new Promise((resolve, reject) => {
+        const out = { meals: [], workouts: [], settings: [] };
+        const tx  = db.transaction(['meals', 'workouts', 'settings'], 'readonly');
+        tx.onerror    = e => reject(e.target.error);
+        tx.oncomplete = () => resolve(out);
+        tx.objectStore('meals').getAll().onsuccess    = e => { out.meals    = e.target.result; };
+        tx.objectStore('workouts').getAll().onsuccess = e => { out.workouts = e.target.result; };
+        tx.objectStore('settings').getAll().onsuccess = e => { out.settings = e.target.result; };
+    });
+}
+
+async function importAllData(backup) {
+    const stores = ['meals', 'workouts', 'settings'];
+    // Clear each store first
+    await Promise.all(stores.map(name => new Promise((resolve, reject) => {
+        const tx = db.transaction([name], 'readwrite');
+        tx.onerror = e => reject(e.target.error);
+        tx.oncomplete = () => resolve();
+        tx.objectStore(name).clear();
+    })));
+    // Re-populate from backup
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(stores, 'readwrite');
+        tx.onerror    = e => reject(e.target.error);
+        tx.oncomplete = () => resolve();
+        // Meals and workouts: strip id so IndexedDB assigns fresh auto-increment keys
+        (backup.meals || []).forEach(m => {
+            const { id, ...rest } = m;
+            tx.objectStore('meals').add(rest);
+        });
+        (backup.workouts || []).forEach(w => {
+            const { id, ...rest } = w;
+            tx.objectStore('workouts').add(rest);
+        });
+        // Settings: key-based, put() acts as upsert
+        (backup.settings || []).forEach(s => tx.objectStore('settings').put(s));
+    });
+}

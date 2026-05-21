@@ -290,6 +290,24 @@
                 <button id="save-ex-goals-btn" class="primary-btn" style="margin-top:14px;">Save Exercise Goals</button>
                 <p id="ex-goals-status" class="status-msg"></p>
             </div>
+
+            <!-- Data Backup card -->
+            <div class="card">
+                <h2>Data Backup</h2>
+                <p class="hint">All data lives on this device. Auto-backup runs at <strong>11 PM daily</strong> and saves a snapshot here. Export a file anytime to keep a copy on your phone or cloud storage.</p>
+                <p class="status-msg" id="last-backup-label" style="margin-top:6px;"></p>
+                <div class="btn-row" style="margin-top:12px;">
+                    <button id="export-btn" class="secondary-btn" style="margin-top:0;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        Export JSON
+                    </button>
+                    <button id="import-btn" class="secondary-btn" style="margin-top:0;">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:5px;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        Import JSON
+                    </button>
+                </div>
+                <input type="file" id="import-file-input" accept=".json" style="display:none">
+            </div>
         </section>
 
     </main>
