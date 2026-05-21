@@ -500,8 +500,9 @@ async function searchUSDA(query) {
     if (searchCache.has(key)) return searchCache.get(key);
 
     const apiKey = await getSetting('usda_key') || 'DEMO_KEY';
-    const types  = encodeURIComponent('Foundation,SR Legacy,Survey (FNDDS)');
-    const url    = `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&dataType=${types}&pageSize=12&api_key=${apiKey}`;
+    const params = new URLSearchParams({ query, pageSize: '12', api_key: apiKey });
+    ['Foundation', 'SR Legacy', 'Survey (FNDDS)'].forEach(t => params.append('dataType', t));
+    const url = `https://api.nal.usda.gov/fdc/v1/foods/search?${params}`;
 
     const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
     if (res.status === 429) throw new Error('Daily search limit reached (50/day with default key).\nAdd a free personal key in the Goals tab.');
