@@ -30,7 +30,7 @@
         <!-- ══ DASHBOARD / TODAY VIEW ══ -->
         <section id="view-dashboard" class="view active">
 
-            <!-- Calendar -->
+            <!-- Calendar (week strip, expandable to month) -->
             <div class="card calendar-card">
                 <div class="cal-nav">
                     <button class="cal-nav-btn" id="cal-prev">&#8249;</button>
@@ -39,14 +39,47 @@
                         <button class="cal-today-btn" id="cal-today-btn">Today</button>
                     </div>
                     <button class="cal-nav-btn" id="cal-next">&#8250;</button>
+                    <button class="cal-expand-btn" id="cal-expand-btn" title="Expand to month view">
+                        <svg id="cal-expand-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                    </button>
                 </div>
-                <div id="cal-grid" class="cal-grid"></div>
+                <div id="cal-week-strip" class="cal-week-strip"></div>
+                <div id="cal-grid" class="cal-grid hidden"></div>
             </div>
 
             <!-- Selected date indicator -->
             <div class="date-chip-row">
                 <span class="date-chip" id="dashboard-date-chip">Today</span>
-                <span class="date-chip-hint">tap any date above to view or log</span>
+                <span class="date-chip-hint">tap any date to view or log</span>
+            </div>
+
+            <!-- Workout summary tile -->
+            <div class="card workout-card">
+                <div class="workout-card-hdr">
+                    <div class="workout-title">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="6.5" y1="12" x2="17.5" y2="12"/>
+                            <line x1="6.5" y1="12" x2="6.5" y2="9.5"/><line x1="6.5" y1="12" x2="6.5" y2="14.5"/>
+                            <line x1="17.5" y1="12" x2="17.5" y2="9.5"/><line x1="17.5" y1="12" x2="17.5" y2="14.5"/>
+                            <line x1="3.5" y1="9.5" x2="9.5" y2="9.5"/><line x1="3.5" y1="14.5" x2="9.5" y2="14.5"/>
+                            <line x1="14.5" y1="9.5" x2="20.5" y2="9.5"/><line x1="14.5" y1="14.5" x2="20.5" y2="14.5"/>
+                        </svg>
+                        Workouts
+                    </div>
+                    <div class="workout-stat-row">
+                        <div class="wk-stat">
+                            <span class="wk-num" id="workout-count">0</span>
+                            <span class="wk-lbl">exercises</span>
+                        </div>
+                        <div class="wk-stat">
+                            <span class="wk-num accent" id="workout-cals-burned">0</span>
+                            <span class="wk-lbl">cal burned</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="workouts-list" class="workouts-container">
+                    <p class="empty-state-sm">No workouts logged. Tap Log to add one!</p>
+                </div>
             </div>
 
             <!-- Calorie ring + macros -->
@@ -82,13 +115,14 @@
             </div>
         </section>
 
-        <!-- ══ LOG FOOD VIEW ══ -->
+        <!-- ══ LOG VIEW ══ -->
         <section id="view-log" class="view hidden">
+
+            <!-- Log a Meal -->
             <div class="card">
                 <h2>Log a Meal</h2>
                 <p class="log-date-row">Logging for: <strong id="log-date-label">Today</strong></p>
 
-                <!-- Field 1: Food item -->
                 <label class="field-label">Food Item</label>
                 <div class="search-wrapper">
                     <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -96,7 +130,6 @@
                     <div id="food-search-results" class="food-dropdown hidden"></div>
                 </div>
 
-                <!-- Field 2: Quantity -->
                 <label class="field-label" style="margin-top:14px;">Quantity</label>
                 <div class="qty-field-row">
                     <button class="qty-btn" id="qty-minus">−</button>
@@ -105,9 +138,7 @@
                     <span id="qty-unit-label" class="qty-unit-label">g</span>
                 </div>
 
-                <!-- Live nutrition preview -->
                 <div id="nutrition-preview" class="nut-preview hidden"></div>
-
                 <button id="add-meal-btn" class="primary-btn" style="margin-top:16px;" disabled>Add to Log</button>
 
                 <button id="search-online-btn" class="text-link-btn">
@@ -115,12 +146,62 @@
                     Search online (Open Food Facts — packaged foods)
                 </button>
             </div>
+
+            <!-- Log an Exercise -->
+            <div class="card ex-log-card">
+                <h2>Log an Exercise</h2>
+                <p class="log-date-row">Logging for: <strong id="ex-log-date-label">Today</strong></p>
+
+                <label class="field-label">Body Part / Category</label>
+                <select id="ex-category" class="select-field">
+                    <option value="">Select category…</option>
+                    <option>Chest</option>
+                    <option>Back</option>
+                    <option>Shoulders</option>
+                    <option>Biceps</option>
+                    <option>Triceps</option>
+                    <option>Legs</option>
+                    <option>Abs / Core</option>
+                    <option>Cardio</option>
+                    <option>Full Body</option>
+                </select>
+
+                <label class="field-label" style="margin-top:12px;">Exercise</label>
+                <select id="ex-name" class="select-field" disabled>
+                    <option value="">Select category first…</option>
+                </select>
+
+                <div class="ex-fields-row">
+                    <div class="ex-field">
+                        <label class="field-label">Sets</label>
+                        <div class="qty-field-row">
+                            <button class="qty-btn" id="sets-minus">−</button>
+                            <input type="number" id="ex-sets" value="3" min="1" max="20">
+                            <button class="qty-btn" id="sets-plus">+</button>
+                        </div>
+                    </div>
+                    <div class="ex-field">
+                        <label class="field-label">Reps</label>
+                        <div class="qty-field-row">
+                            <button class="qty-btn" id="reps-minus">−</button>
+                            <input type="number" id="ex-reps" value="10" min="1" max="200">
+                            <button class="qty-btn" id="reps-plus">+</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="ex-cal-preview" class="ex-cal-preview hidden">
+                    🔥 <span id="ex-cal-value">0</span> cal burned (estimated)
+                </div>
+
+                <button id="add-exercise-btn" class="primary-btn" style="margin-top:16px;" disabled>Log Exercise</button>
+            </div>
         </section>
 
         <!-- ══ WEEKLY SUMMARY VIEW ══ -->
         <section id="view-summary" class="view hidden">
             <div class="card">
-                <h2>Weekly Averages</h2>
+                <h2>Weekly Nutrition Averages</h2>
                 <div class="summary-stats">
                     <div class="stat-box">
                         <span class="stat-num" id="avg-cals">0</span>
@@ -140,12 +221,33 @@
                     </div>
                 </div>
             </div>
+            <div class="card">
+                <h2 class="workout-h2">Weekly Workout Averages</h2>
+                <div class="summary-stats">
+                    <div class="stat-box">
+                        <span class="stat-num stat-pink" id="avg-ex-cals">0</span>
+                        <span class="stat-label">Avg Cal Burned</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num stat-pink" id="avg-ex-days">0</span>
+                        <span class="stat-label">Workout Days</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num stat-pink" id="avg-ex-count">0</span>
+                        <span class="stat-label">Avg Exercises</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-num stat-pink" id="avg-net-cals">0</span>
+                        <span class="stat-label">Avg Net Cals</span>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- ══ SETTINGS / GOALS VIEW ══ -->
         <section id="view-settings" class="view hidden">
             <div class="card">
-                <h2>Daily Goals</h2>
+                <h2>Daily Nutrition Goals</h2>
                 <p class="hint">Set your daily nutrition targets.</p>
                 <div class="goal-row">
                     <label for="goal-calories">Calories (kcal)</label>
@@ -166,12 +268,27 @@
                 <button id="save-goals-btn" class="primary-btn" style="margin-top:14px;">Save Goals</button>
                 <p id="goals-status" class="status-msg"></p>
 
-                <div class="separator-line"></div>
+                <hr class="separator-line">
                 <h3 class="sub-heading" style="margin-top:16px;">Nutrition Search (USDA)</h3>
                 <p class="hint">Uses USDA FoodData Central — 50 free searches/day with the built-in key. For unlimited searches, register free at <strong>fdc.nal.usda.gov</strong> and paste your key below.</p>
                 <input type="text" id="usda-key-input" placeholder="Optional: paste your free USDA API key here" autocomplete="off" spellcheck="false" style="margin-top:8px;">
                 <button id="save-usda-btn" class="secondary-btn" style="margin-top:8px;">Save Key</button>
                 <p id="usda-key-status" class="status-msg"></p>
+            </div>
+
+            <div class="card">
+                <h2 class="workout-h2">Exercise Goals</h2>
+                <p class="hint">Used for calorie burn calculation and daily goal tracking on the calendar.</p>
+                <div class="goal-row">
+                    <label for="goal-ex-calories">Daily Burn Target (kcal)</label>
+                    <input type="number" id="goal-ex-calories" value="300" min="50" max="2000">
+                </div>
+                <div class="goal-row">
+                    <label for="goal-body-weight">Body Weight (kg)</label>
+                    <input type="number" id="goal-body-weight" value="70" min="30" max="300" step="0.5">
+                </div>
+                <button id="save-ex-goals-btn" class="primary-btn" style="margin-top:14px;">Save Exercise Goals</button>
+                <p id="ex-goals-status" class="status-msg"></p>
             </div>
         </section>
 

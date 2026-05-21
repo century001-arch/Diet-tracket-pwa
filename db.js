@@ -1,5 +1,5 @@
 const DB_NAME = 'NutriSnapDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let db;
 
 function initDB() {
@@ -15,6 +15,10 @@ function initDB() {
             }
             if (!d.objectStoreNames.contains('settings')) {
                 d.createObjectStore('settings', { keyPath: 'key' });
+            }
+            if (!d.objectStoreNames.contains('workouts')) {
+                d.createObjectStore('workouts', { keyPath: 'id', autoIncrement: true })
+                 .createIndex('date', 'date', { unique: false });
             }
         };
     });
@@ -45,12 +49,44 @@ function getMealsByDate(dateString) {
 }
 
 function getMealsByMonth(yearMonth) {
-    // yearMonth: "YYYY-MM"
     return new Promise((resolve, reject) => {
         const tx = db.transaction(['meals'], 'readonly');
         tx.onerror = (e) => reject(e.target.error);
         const range = IDBKeyRange.bound(yearMonth + '-01', yearMonth + '-31');
         tx.objectStore('meals').index('date').getAll(range).onsuccess = (e) => resolve(e.target.result);
+    });
+}
+
+function saveWorkout(workout) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(['workouts'], 'readwrite');
+        tx.onerror = (e) => reject(e.target.error);
+        tx.objectStore('workouts').put(workout).onsuccess = (e) => resolve(e.target.result);
+    });
+}
+
+function deleteWorkout(id) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(['workouts'], 'readwrite');
+        tx.onerror = (e) => reject(e.target.error);
+        tx.objectStore('workouts').delete(id).onsuccess = () => resolve();
+    });
+}
+
+function getWorkoutsByDate(dateString) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(['workouts'], 'readonly');
+        tx.onerror = (e) => reject(e.target.error);
+        tx.objectStore('workouts').index('date').getAll(dateString).onsuccess = (e) => resolve(e.target.result);
+    });
+}
+
+function getWorkoutsByMonth(yearMonth) {
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(['workouts'], 'readonly');
+        tx.onerror = (e) => reject(e.target.error);
+        const range = IDBKeyRange.bound(yearMonth + '-01', yearMonth + '-31');
+        tx.objectStore('workouts').index('date').getAll(range).onsuccess = (e) => resolve(e.target.result);
     });
 }
 
