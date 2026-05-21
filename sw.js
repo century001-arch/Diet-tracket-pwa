@@ -1,5 +1,5 @@
-const CACHE_NAME = 'nutrisnap-cache-v6';
-const CORE_ASSETS = ['./', './index.html', './style.css', './app.js', './db.js', './foods.js', './manifest.json'];
+const CACHE_NAME = 'nutrisnap-cache-v7';
+const CORE_ASSETS = ['./', './index.html', './style.css', './app.js', './db.js', './manifest.json'];
 const OPTIONAL_ASSETS = ['./assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png'];
 
 self.addEventListener('install', (e) => {
@@ -24,5 +24,6 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
     if (e.request.url.includes('generativelanguage.googleapis.com')) return;
     if (e.request.url.includes('openfoodfacts.org')) return;
+    if (e.request.url.includes('api.nal.usda.gov')) return;
     e.respondWith(caches.match(e.request).then((res) => res || fetch(e.request)));
 });

@@ -92,7 +92,7 @@
                 <label class="field-label">Food Item</label>
                 <div class="search-wrapper">
                     <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    <input type="text" id="food-search-input" placeholder="e.g. Roti, Biryani, Apple…" autocomplete="off" spellcheck="false">
+                    <input type="text" id="food-search-input" placeholder="e.g. sunny side up egg, roti, biryani…" autocomplete="off" spellcheck="false">
                     <div id="food-search-results" class="food-dropdown hidden"></div>
                 </div>
 
@@ -100,9 +100,9 @@
                 <label class="field-label" style="margin-top:14px;">Quantity</label>
                 <div class="qty-field-row">
                     <button class="qty-btn" id="qty-minus">−</button>
-                    <input type="number" id="food-qty" value="1" min="0.5" max="20" step="0.5">
+                    <input type="number" id="food-qty" value="100" min="1" max="2000" step="1">
                     <button class="qty-btn" id="qty-plus">+</button>
-                    <span id="qty-unit-label" class="qty-unit-label">serving</span>
+                    <span id="qty-unit-label" class="qty-unit-label">g</span>
                 </div>
 
                 <!-- Live nutrition preview -->
@@ -165,6 +165,13 @@
                 </div>
                 <button id="save-goals-btn" class="primary-btn" style="margin-top:14px;">Save Goals</button>
                 <p id="goals-status" class="status-msg"></p>
+
+                <div class="separator-line"></div>
+                <h3 class="sub-heading" style="margin-top:16px;">Nutrition Search (USDA)</h3>
+                <p class="hint">Uses USDA FoodData Central — 50 free searches/day with the built-in key. For unlimited searches, register free at <strong>fdc.nal.usda.gov</strong> and paste your key below.</p>
+                <input type="text" id="usda-key-input" placeholder="Optional: paste your free USDA API key here" autocomplete="off" spellcheck="false" style="margin-top:8px;">
+                <button id="save-usda-btn" class="secondary-btn" style="margin-top:8px;">Save Key</button>
+                <p id="usda-key-status" class="status-msg"></p>
             </div>
         </section>
 
@@ -191,7 +198,6 @@
     </nav>
 
     <script src="db.js"></script>
-    <script src="foods.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
