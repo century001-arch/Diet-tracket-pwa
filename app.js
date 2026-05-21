@@ -1,20 +1,20 @@
 // ── Global state ───────────────────────────────────────────────────────────────
 let selectedDate      = getTodayString();
-let calendarMode      = 'week';           // 'week' | 'month'
+let calendarMode      = 'week';
 let calendarWeekStart = getWeekStart(new Date());
 let calendarYear      = new Date().getFullYear();
 let calendarMonth     = new Date().getMonth();
-let weekDayData       = {};  // date -> { cals, burned, workoutCount }
-let monthCalData      = {};  // date -> total calories consumed
-let monthWorkoutData  = {};  // date -> { count, burned }
+let weekDayData       = {};
+let monthCalData      = {};
+let monthWorkoutData  = {};
 let calGoal           = 2000;
 
-const views      = document.querySelectorAll('.view');
-const navButtons = document.querySelectorAll('.nav-btn');
+const views       = document.querySelectorAll('.view');
+const navButtons  = document.querySelectorAll('.nav-btn');
 const headerTitle = document.getElementById('header-title');
 const searchCache = new Map();
 
-// ── Exercise database (MET-based) ──────────────────────────────────────────────
+// ── Exercise database (MET values) ─────────────────────────────────────────────
 const EXERCISE_DB = {
     'Chest': [
         { name: 'Bench Press', met: 5.5 },
@@ -214,11 +214,11 @@ async function getGoals() {
         getSetting('goal_ex_calories'), getSetting('goal_body_weight')
     ]);
     return {
-        calories:   parseInt(cals)      || 2000,
-        protein:    parseInt(protein)   || 150,
-        carbs:      parseInt(carbs)     || 200,
-        fats:       parseInt(fats)      || 65,
-        exCalories: parseInt(exCals)    || 300,
+        calories:   parseInt(cals)         || 2000,
+        protein:    parseInt(protein)      || 150,
+        carbs:      parseInt(carbs)        || 200,
+        fats:       parseInt(fats)         || 65,
+        exCalories: parseInt(exCals)       || 300,
         bodyWeight: parseFloat(bodyWeight) || 70
     };
 }
@@ -226,6 +226,7 @@ async function getGoals() {
 // ── Exercise calorie calculation (MET-based) ───────────────────────────────────
 
 function calcExerciseCalories(met, sets, reps, bodyWeightKg) {
+    // ~4s active per rep + 90s rest per set
     const secondsPerSet = reps * 4 + 90;
     const totalHours = (sets * secondsPerSet) / 3600;
     return Math.max(1, Math.round(met * bodyWeightKg * totalHours));
@@ -240,17 +241,19 @@ function makeDayRing(cals, burned, goalCals, goalBurn, size) {
     const nutPct  = goalCals > 0 ? Math.min(cals / goalCals, 1) : 0;
     const burnPct = goalBurn > 0 ? Math.min(burned / goalBurn, 1) : 0;
     const nutDash  = (nutPct * circ).toFixed(1);
-    const burnDash = (burnPct * circ).toFixed(1);
 
     let nutColor = 'rgba(255,255,255,0.08)';
     if (nutPct >= 0.8 && nutPct <= 1.15) nutColor = '#34C759';
-    else if (nutPct > 0.4) nutColor = '#FF9F0A';
-    else if (nutPct > 0) nutColor = '#FF6B6B';
+    else if (nutPct > 0.4)               nutColor = '#FF9F0A';
+    else if (nutPct > 0)                 nutColor = '#FF6B6B';
 
-    const hasBurnArc = burned > 0;
-    const burnArc = hasBurnArc
-        ? `<circle cx="${cx}" cy="${cy}" r="${r - strokeW - 1}" fill="none" stroke="#FF0099" stroke-width="2"
-               stroke-dasharray="${burnDash} ${circ.toFixed(1)}"
+    const innerR = r - strokeW - 1;
+    const burnDash = (burnPct * 2 * Math.PI * innerR).toFixed(1);
+    const burnCirc = (2 * Math.PI * innerR).toFixed(1);
+
+    const burnArc = burned > 0
+        ? `<circle cx="${cx}" cy="${cy}" r="${innerR}" fill="none" stroke="#FF0099" stroke-width="2"
+               stroke-dasharray="${burnDash} ${burnCirc}"
                stroke-linecap="round" transform="rotate(-90 ${cx} ${cy})"/>`
         : '';
 
@@ -269,7 +272,7 @@ function makeDayRing(cals, burned, goalCals, goalBurn, size) {
     </svg>`;
 }
 
-// ── Calendar setup ─────────────────────────────────────────────────────────────
+// ── Calendar ───────────────────────────────────────────────────────────────────
 
 const MONTH_NAMES = ['January','February','March','April','May','June',
                      'July','August','September','October','November','December'];
@@ -300,7 +303,7 @@ async function setupCalendar() {
 
     document.getElementById('cal-today-btn').addEventListener('click', async () => {
         calendarWeekStart = getWeekStart(new Date());
-        calendarYear = new Date().getFullYear();
+        calendarYear  = new Date().getFullYear();
         calendarMonth = new Date().getMonth();
         await selectDate(getTodayString());
     });
@@ -339,9 +342,11 @@ async function refreshWeekStrip() {
     weekDayData = {};
     dates.forEach((d, i) => {
         const [meals, workouts] = allData[i];
-        const cals   = meals.reduce((s, m) => s + m.calories, 0);
-        const burned = workouts.reduce((s, w) => s + (w.caloriesBurned || 0), 0);
-        weekDayData[d] = { cals, burned, workoutCount: workouts.length };
+        weekDayData[d] = {
+            cals:         meals.reduce((s, m) => s + m.calories, 0),
+            burned:       workouts.reduce((s, w) => s + (w.caloriesBurned || 0), 0),
+            workoutCount: workouts.length
+        };
     });
     updateWeekLabel(dates);
     renderWeekStrip(dates);
@@ -350,12 +355,9 @@ async function refreshWeekStrip() {
 function updateWeekLabel(dates) {
     const first = new Date(dates[0] + 'T00:00:00');
     const last  = new Date(dates[6] + 'T00:00:00');
-    let label;
-    if (first.getMonth() === last.getMonth()) {
-        label = `${first.getDate()}–${last.getDate()} ${MONTH_NAMES[first.getMonth()].slice(0,3)} ${first.getFullYear()}`;
-    } else {
-        label = `${first.getDate()} ${MONTH_NAMES[first.getMonth()].slice(0,3)} – ${last.getDate()} ${MONTH_NAMES[last.getMonth()].slice(0,3)}`;
-    }
+    const label = first.getMonth() === last.getMonth()
+        ? `${first.getDate()}–${last.getDate()} ${MONTH_NAMES[first.getMonth()].slice(0,3)} ${first.getFullYear()}`
+        : `${first.getDate()} ${MONTH_NAMES[first.getMonth()].slice(0,3)} – ${last.getDate()} ${MONTH_NAMES[last.getMonth()].slice(0,3)}`;
     document.getElementById('cal-month-label').textContent = label;
 }
 
@@ -363,7 +365,6 @@ function renderWeekStrip(dates) {
     const strip    = document.getElementById('cal-week-strip');
     const today    = getTodayString();
     const dayNames = ['Mo','Tu','We','Th','Fr','Sa','Su'];
-    const goals    = { calories: calGoal, exCalories: 300 };
 
     strip.innerHTML = '';
     (dates || getWeekDates(calendarWeekStart)).forEach((dateStr, i) => {
@@ -377,16 +378,14 @@ function renderWeekStrip(dates) {
         if (data.cals > 0 || data.burned > 0) cell.classList.add('has-data');
 
         const nameEl = document.createElement('div');
-        nameEl.className = 'cal-week-name';
-        nameEl.textContent = dayNames[i];
+        nameEl.className = 'cal-week-name'; nameEl.textContent = dayNames[i];
 
         const numEl = document.createElement('div');
-        numEl.className = 'cal-week-num';
-        numEl.textContent = d.getDate();
+        numEl.className = 'cal-week-num'; numEl.textContent = d.getDate();
 
         const ringEl = document.createElement('div');
         ringEl.className = 'cal-week-ring';
-        ringEl.innerHTML = makeDayRing(data.cals, data.burned, calGoal, goals.exCalories, 26);
+        ringEl.innerHTML = makeDayRing(data.cals, data.burned, calGoal, 300, 26);
 
         cell.appendChild(nameEl);
         cell.appendChild(numEl);
@@ -444,6 +443,7 @@ function renderCalendar() {
 
         const cals     = monthCalData[dateStr] || 0;
         const workData = monthWorkoutData[dateStr] || { count: 0, burned: 0 };
+        if (cals > 0 || workData.burned > 0) cell.classList.add('has-data');
 
         const num = document.createElement('span');
         num.className = 'cal-day-num'; num.textContent = d;
@@ -455,7 +455,6 @@ function renderCalendar() {
         cell.appendChild(ringEl);
 
         if (cals) {
-            cell.classList.add('has-data');
             const calEl = document.createElement('span');
             calEl.className = 'cal-day-cal';
             calEl.textContent = cals >= 1000 ? `${(cals/1000).toFixed(1)}k` : cals;
@@ -543,7 +542,7 @@ function isLiquid(name) {
 }
 
 async function searchOpenFoodFacts(query) {
-    const url = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=12&fields=product_name,nutriments,serving_size`;
+    const url  = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&json=1&page_size=12&fields=product_name,nutriments,serving_size`;
     const res  = await fetch(url, { signal: AbortSignal.timeout(8000) });
     const data = await res.json();
     return (data.products || [])
@@ -589,8 +588,7 @@ function setupFoodSearch() {
         showLoadingDropdown();
         debounce = setTimeout(async () => {
             try {
-                const results = await searchUSDA(q);
-                renderDropdown(results, 'usda');
+                renderDropdown(await searchUSDA(q), 'usda');
             } catch (err) {
                 showErrorDropdown(err.message);
             }
@@ -626,8 +624,7 @@ function setupFoodSearch() {
                 nameEl.className = 'food-result-name'; nameEl.textContent = food.n;
                 const rightEl = document.createElement('span');
                 rightEl.className = 'food-result-right';
-                const unit = food.offUnit || (food.liquid ? 'per 100ml' : 'per 100g');
-                rightEl.innerHTML = `<b>${food.c}</b> cal<br><small>${unit}</small>`;
+                rightEl.innerHTML = `<b>${food.c}</b> cal<br><small>${food.offUnit || (food.liquid ? 'per 100ml' : 'per 100g')}</small>`;
                 item.appendChild(nameEl); item.appendChild(rightEl);
                 item.addEventListener('mousedown', e => { e.preventDefault(); selectFood(food); });
                 dropdown.appendChild(item);
@@ -669,11 +666,7 @@ function setupFoodSearch() {
         if (!selectedFood) { nutPreview.classList.add('hidden'); return; }
         const qty  = Math.max(1, parseFloat(qtyInput.value) || 100);
         const mult = selectedFood.offUnit ? 1 : qty / 100;
-        const cal  = Math.round(selectedFood.c  * mult);
-        const p    = Math.round(selectedFood.p  * mult);
-        const cb   = Math.round(selectedFood.cb * mult);
-        const f    = Math.round(selectedFood.f  * mult);
-        nutPreview.textContent = `${qty}${currentUnit}: ${cal} cal  •  P: ${p}g  •  C: ${cb}g  •  F: ${f}g`;
+        nutPreview.textContent = `${qty}${currentUnit}: ${Math.round(selectedFood.c*mult)} cal  •  P: ${Math.round(selectedFood.p*mult)}g  •  C: ${Math.round(selectedFood.cb*mult)}g  •  F: ${Math.round(selectedFood.f*mult)}g`;
         nutPreview.classList.remove('hidden');
     }
 
@@ -704,9 +697,9 @@ function setupFoodSearch() {
         onlineBtn.textContent = 'Searching…'; onlineBtn.disabled = true;
         try {
             const results = await searchOpenFoodFacts(q);
-            if (results.length === 0) alert(`No results found for "${q}". Try simpler terms.`);
+            if (results.length === 0) alert(`No results for "${q}". Try simpler terms.`);
             else renderDropdown(results, 'off');
-        } catch { alert('Online search failed. Check your internet connection.'); }
+        } catch { alert('Online search failed. Check your connection.'); }
         finally { onlineBtn.textContent = orig; onlineBtn.disabled = false; }
     });
 }
@@ -768,38 +761,31 @@ function setupExerciseLog() {
 
     function updateExCalPreview() {
         if (!selectedMET) { preview.classList.add('hidden'); return; }
-        const sets = parseInt(setsInp.value) || 3;
-        const reps = parseInt(repsInp.value) || 10;
-        const burned = calcExerciseCalories(selectedMET, sets, reps, bodyWeight);
+        const burned = calcExerciseCalories(selectedMET, parseInt(setsInp.value)||3, parseInt(repsInp.value)||10, bodyWeight);
         calVal.textContent = burned;
         preview.classList.remove('hidden');
     }
 
     addBtn.addEventListener('click', async () => {
         if (!selectedMET) return;
-        const sets    = parseInt(setsInp.value) || 3;
-        const reps    = parseInt(repsInp.value) || 10;
-        const burned  = calcExerciseCalories(selectedMET, sets, reps, bodyWeight);
-        const exName  = nameSel.options[nameSel.selectedIndex].textContent;
-        const catName = catSel.value;
+        const sets   = parseInt(setsInp.value) || 3;
+        const reps   = parseInt(repsInp.value) || 10;
+        const burned = calcExerciseCalories(selectedMET, sets, reps, bodyWeight);
+        const exName = nameSel.options[nameSel.selectedIndex].textContent;
 
         await saveWorkout({
-            date:            selectedDate,
-            exercise:        exName,
-            category:        catName,
-            sets,
-            reps,
-            caloriesBurned:  burned
+            date:           selectedDate,
+            exercise:       exName,
+            category:       catSel.value,
+            sets, reps,
+            caloriesBurned: burned
         });
 
-        // Reset form
         catSel.value = '';
         nameSel.innerHTML = '<option value="">Select category first…</option>';
         nameSel.disabled = true;
-        setsInp.value = '3';
-        repsInp.value = '10';
-        selectedMET = 0;
-        addBtn.disabled = true;
+        setsInp.value = '3'; repsInp.value = '10';
+        selectedMET = 0; addBtn.disabled = true;
         preview.classList.add('hidden');
 
         navigateTo('view-dashboard');
@@ -838,17 +824,14 @@ function setupSettings() {
         setTimeout(() => { st.textContent = ''; }, 3000);
     });
 
-    // Exercise goals
     Promise.all([getSetting('goal_ex_calories'), getSetting('goal_body_weight')]).then(([ec, bw]) => {
         if (ec) document.getElementById('goal-ex-calories').value = ec;
         if (bw) document.getElementById('goal-body-weight').value = bw;
     });
     document.getElementById('save-ex-goals-btn').addEventListener('click', async () => {
-        const ec = document.getElementById('goal-ex-calories').value;
-        const bw = document.getElementById('goal-body-weight').value;
         await Promise.all([
-            saveSetting('goal_ex_calories', ec),
-            saveSetting('goal_body_weight', bw)
+            saveSetting('goal_ex_calories', document.getElementById('goal-ex-calories').value),
+            saveSetting('goal_body_weight', document.getElementById('goal-body-weight').value)
         ]);
         const st = document.getElementById('ex-goals-status');
         st.textContent = 'Exercise goals saved!'; st.style.color = '#34C759';
@@ -869,11 +852,10 @@ async function updateDashboard() {
 
     let c = 0, p = 0, cb = 0, f = 0;
     meals.forEach(m => { c += m.calories; p += m.protein; cb += m.carbs; f += m.fats; });
-
     let totalBurned = 0;
     workouts.forEach(w => { totalBurned += (w.caloriesBurned || 0); });
 
-    // Update in-memory caches
+    // Update in-memory caches so calendar re-renders correctly
     if (calendarMode === 'week') {
         weekDayData[selectedDate] = { cals: c, burned: totalBurned, workoutCount: workouts.length };
     } else {
@@ -904,7 +886,7 @@ async function updateDashboard() {
     }
 
     // Workout tile
-    document.getElementById('workout-count').textContent      = workouts.length;
+    document.getElementById('workout-count').textContent       = workouts.length;
     document.getElementById('workout-cals-burned').textContent = totalBurned;
     const wList = document.getElementById('workouts-list');
     wList.innerHTML = '';
@@ -923,19 +905,13 @@ async function updateDashboard() {
 }
 
 function createMealCard(m) {
-    const row = document.createElement('div');
-    row.className = 'card meal-card';
-
+    const row   = document.createElement('div'); row.className = 'card meal-card';
     const thumb = document.createElement('div');
-    thumb.className = 'meal-thumb meal-thumb-placeholder';
-    thumb.textContent = '🍽️';
+    thumb.className = 'meal-thumb meal-thumb-placeholder'; thumb.textContent = '🍽️';
 
-    const info = document.createElement('div');
-    info.className = 'meal-info';
-    const name = document.createElement('div');
-    name.className = 'meal-name'; name.textContent = m.name;
-    const macros = document.createElement('div');
-    macros.className = 'meal-macros';
+    const info   = document.createElement('div'); info.className = 'meal-info';
+    const name   = document.createElement('div'); name.className = 'meal-name'; name.textContent = m.name;
+    const macros = document.createElement('div'); macros.className = 'meal-macros';
     macros.textContent = `P: ${m.protein}g  C: ${m.carbs}g  F: ${m.fats}g`;
     info.appendChild(name); info.appendChild(macros);
 
@@ -955,20 +931,14 @@ function createMealCard(m) {
 }
 
 function createWorkoutItem(w) {
-    const row = document.createElement('div');
-    row.className = 'workout-item';
-
-    const icon = document.createElement('div');
-    icon.className = 'workout-item-icon';
+    const row  = document.createElement('div'); row.className = 'workout-item';
+    const icon = document.createElement('div'); icon.className = 'workout-item-icon';
     icon.textContent = CATEGORY_EMOJI[w.category] || '🏋️';
 
-    const info = document.createElement('div');
-    info.className = 'workout-item-info';
-    const name = document.createElement('div');
-    name.className = 'workout-item-name'; name.textContent = w.exercise;
-    const detail = document.createElement('div');
-    detail.className = 'workout-item-detail';
-    detail.textContent = `${w.sets} sets × ${w.reps} reps`;
+    const info   = document.createElement('div'); info.className = 'workout-item-info';
+    const name   = document.createElement('div'); name.className = 'workout-item-name'; name.textContent = w.exercise;
+    const detail = document.createElement('div'); detail.className = 'workout-item-detail';
+    detail.textContent = `${w.sets} sets × ${w.reps} reps  •  ${w.category}`;
     info.appendChild(name); info.appendChild(detail);
 
     const calDiv = document.createElement('div'); calDiv.className = 'workout-item-cals';
@@ -1023,7 +993,6 @@ async function updateWeeklySummary() {
     const wd = workoutDays || 1;
     document.getElementById('avg-ex-cals').textContent  = Math.round(totalBurned / wd);
     document.getElementById('avg-ex-days').textContent  = workoutDays;
-    document.getElementById('avg-ex-count').textContent = Math.round(totalExercises / wd);
-    const avgNet = Math.round((sc / nd) - (totalBurned / wd));
-    document.getElementById('avg-net-cals').textContent = avgNet;
+    document.getElementById('avg-ex-count').textContent = (workoutDays > 0 ? Math.round(totalExercises / workoutDays) : 0);
+    document.getElementById('avg-net-cals').textContent = Math.round(sc / nd) - Math.round(totalBurned / wd);
 }
