@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nutrisnap-cache-v5';
+const CACHE_NAME = 'nutrisnap-cache-v6';
 const CORE_ASSETS = ['./', './index.html', './style.css', './app.js', './db.js', './foods.js', './manifest.json'];
 const OPTIONAL_ASSETS = ['./assets/icon.svg', './assets/icon-192.png', './assets/icon-512.png'];
 
