@@ -816,3 +816,22 @@ input::placeholder { color: var(--muted); }
     text-align: center; letter-spacing: 0.02em;
     text-shadow: var(--glow-p);
 }
+
+/* ── Toast notification ── */
+.app-toast {
+    position: fixed; bottom: 90px; left: 50%;
+    transform: translateX(-50%) translateY(14px);
+    padding: 10px 22px; border-radius: 22px;
+    font-size: 0.88rem; font-weight: 700;
+    z-index: 9999; opacity: 0; pointer-events: none;
+    white-space: nowrap; backdrop-filter: blur(14px);
+    transition: opacity 0.3s, transform 0.3s;
+    background: rgba(0,245,255,0.13);
+    border: 1px solid var(--primary); color: var(--primary);
+    box-shadow: var(--glow-c);
+}
+.app-toast.toast-success {
+    background: rgba(52,199,89,0.12); border-color: #34C759;
+    color: #34C759; box-shadow: 0 0 12px rgba(52,199,89,0.35);
+}
+.app-toast.visible { opacity: 1; transform: translateX(-50%) translateY(0); }

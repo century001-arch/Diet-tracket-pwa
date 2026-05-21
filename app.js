@@ -120,6 +120,7 @@ const CATEGORY_EMOJI = {
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         await initDB();
+        await checkAndRestoreBackup();
         registerServiceWorker();
         setupNavigation();
         await setupCalendar();
@@ -127,6 +128,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setupFoodSearch();
         setupExerciseLog();
         setupSettings();
+        scheduleBackup();
     } catch (err) { console.error('App init error:', err); }
 });
 
@@ -134,6 +136,90 @@ function registerServiceWorker() {
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('sw.js').catch(e => console.error('SW:', e));
     }
+}
+
+// ── Toast notification ─────────────────────────────────────────────────────────
+
+function showToast(msg, type = 'info') {
+    let toast = document.getElementById('app-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'app-toast';
+        document.body.appendChild(toast);
+    }
+    toast.className = `app-toast toast-${type} visible`;
+    toast.textContent = msg;
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => toast.classList.remove('visible'), 3500);
+}
+
+// ── Daily 11 PM automatic backup ───────────────────────────────────────────────
+
+async function performAutoBackup(silent) {
+    try {
+        const data = await exportAllData();
+        const json = JSON.stringify({
+            version: 1, appName: 'NutriSnap',
+            exportDate: new Date().toISOString(),
+            ...data
+        });
+        localStorage.setItem('nutrisnap_backup', json);
+        localStorage.setItem('nutrisnap_last_backup', getTodayString());
+        if (!silent) showToast('Daily backup saved ✓', 'success');
+        updateLastBackupLabel();
+    } catch (err) {
+        console.error('Auto-backup failed:', err);
+    }
+}
+
+function scheduleBackup() {
+    const now    = new Date();
+    const target = new Date();
+    target.setHours(23, 0, 0, 0); // 11:00 PM tonight
+
+    // Run missed backup if we're past 11 PM and haven't backed up today
+    if (now >= target && localStorage.getItem('nutrisnap_last_backup') !== getTodayString()) {
+        performAutoBackup(true);
+    }
+
+    // If already past 11 PM, aim for tomorrow night
+    if (now >= target) target.setDate(target.getDate() + 1);
+
+    setTimeout(async () => {
+        await performAutoBackup(false);
+        scheduleBackup(); // reschedule for 11 PM the following day
+    }, target.getTime() - Date.now());
+}
+
+async function checkAndRestoreBackup() {
+    // If the DB has no meals and no workouts but a localStorage backup exists, offer restore
+    const [meals, workouts] = await Promise.all([
+        getMealsByDate(getTodayString()).catch(() => []),
+        getWorkoutsByDate(getTodayString()).catch(() => [])
+    ]);
+    const backup = localStorage.getItem('nutrisnap_backup');
+    if (meals.length === 0 && workouts.length === 0 && backup) {
+        try {
+            const data = JSON.parse(backup);
+            const mealCount    = data.meals?.length    || 0;
+            const workoutCount = data.workouts?.length || 0;
+            if ((mealCount + workoutCount) > 0) {
+                const date = data.exportDate ? new Date(data.exportDate).toLocaleDateString() : 'unknown date';
+                if (confirm(`A backup from ${date} was found with ${mealCount} meals and ${workoutCount} workouts. Restore it now?`)) {
+                    await importAllData(data);
+                    showToast('Data restored from backup ✓', 'success');
+                }
+            }
+        } catch (e) { /* corrupt backup — ignore */ }
+    }
+}
+
+function updateLastBackupLabel() {
+    const el = document.getElementById('last-backup-label');
+    if (!el) return;
+    const last = localStorage.getItem('nutrisnap_last_backup');
+    el.textContent = last ? `Last auto-backup: ${formatDateDisplay(last)}` : 'No backup taken yet today.';
+    el.style.color = last === getTodayString() ? '#34C759' : '#FF9F0A';
 }
 
 // ── Date helpers ───────────────────────────────────────────────────────────────
@@ -837,6 +923,51 @@ function setupSettings() {
         const st = document.getElementById('ex-goals-status');
         st.textContent = 'Exercise goals saved!'; st.style.color = '#34C759';
         setTimeout(() => { st.textContent = ''; }, 2000);
+    });
+
+    // Backup section
+    updateLastBackupLabel();
+
+    document.getElementById('export-btn').addEventListener('click', async () => {
+        const data = await exportAllData();
+        const json = JSON.stringify({
+            version: 1, appName: 'NutriSnap',
+            exportDate: new Date().toISOString(),
+            ...data
+        }, null, 2);
+        const blob = new Blob([json], { type: 'application/json' });
+        const a    = Object.assign(document.createElement('a'), {
+            href:     URL.createObjectURL(blob),
+            download: `nutrisnap-backup-${getTodayString()}.json`
+        });
+        a.click();
+        URL.revokeObjectURL(a.href);
+        localStorage.setItem('nutrisnap_backup', json);
+        localStorage.setItem('nutrisnap_last_backup', getTodayString());
+        updateLastBackupLabel();
+        showToast('Backup file downloaded ✓', 'success');
+    });
+
+    const importFileInput = document.getElementById('import-file-input');
+    document.getElementById('import-btn').addEventListener('click', () => importFileInput.click());
+    importFileInput.addEventListener('change', async () => {
+        const file = importFileInput.files[0];
+        if (!file) return;
+        try {
+            const data = JSON.parse(await file.text());
+            if (!data.meals && !data.workouts && !data.settings) throw new Error('Invalid NutriSnap backup file.');
+            const mealCount    = data.meals?.length    || 0;
+            const workoutCount = data.workouts?.length || 0;
+            const date         = data.exportDate ? new Date(data.exportDate).toLocaleDateString() : 'backup';
+            if (!confirm(`Restore ${mealCount} meals, ${workoutCount} workouts and settings from ${date}?\n\nThis will REPLACE all current data.`)) return;
+            await importAllData(data);
+            await updateDashboard();
+            showToast('Data restored successfully ✓', 'success');
+            navigateTo('view-dashboard');
+        } catch (err) {
+            alert(`Import failed: ${err.message}`);
+        }
+        importFileInput.value = '';
     });
 }
 
