@@ -1,5 +1,10 @@
-let currentImageBase64 = null;
-const views = document.querySelectorAll('.view');
+// ── Global state ──────────────────────────────────────────────────────────────
+let selectedDate   = getTodayString();
+let calendarYear   = new Date().getFullYear();
+let calendarMonth  = new Date().getMonth();   // 0-indexed
+let monthCalData   = {};                       // { "YYYY-MM-DD": totalCalories }
+
+const views      = document.querySelectorAll('.view');
 const navButtons = document.querySelectorAll('.nav-btn');
 const headerTitle = document.getElementById('header-title');
 
@@ -8,10 +13,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         await initDB();
         registerServiceWorker();
         setupNavigation();
+        await setupCalendar();
         setupFoodSearch();
-        setupCamera();
         setupSettings();
-        updateDashboard();
     } catch (err) { console.error('App init error:', err); }
 });
 
@@ -21,16 +25,38 @@ function registerServiceWorker() {
     }
 }
 
+// ── Date helpers ───────────────────────────────────────────────────────────────
+
+function getTodayString() {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function formatDateDisplay(dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    return d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+// ── Navigation ─────────────────────────────────────────────────────────────────
+
 function navigateTo(target) {
     const backBtn = document.getElementById('back-btn');
     navButtons.forEach(b => b.classList.toggle('active', b.getAttribute('data-target') === target));
     views.forEach(v => v.id === target ? v.classList.remove('hidden') : v.classList.add('hidden'));
     backBtn.classList.toggle('hidden', target === 'view-dashboard');
 
-    if (target === 'view-dashboard') { headerTitle.textContent = "Today's Overview"; updateDashboard(); }
-    else if (target === 'view-log')      headerTitle.textContent = "Log Your Meal";
-    else if (target === 'view-summary')  { headerTitle.textContent = "Weekly Trends"; updateWeeklySummary(); }
-    else if (target === 'view-settings') headerTitle.textContent = "Configuration";
+    if (target === 'view-dashboard') {
+        headerTitle.textContent = selectedDate === getTodayString() ? "Today's Overview" : formatDateDisplay(selectedDate);
+        updateDashboard();
+    } else if (target === 'view-log') {
+        headerTitle.textContent = "Log Your Meal";
+        updateLogDateLabel();
+    } else if (target === 'view-summary') {
+        headerTitle.textContent = "Weekly Trends";
+        updateWeeklySummary();
+    } else if (target === 'view-settings') {
+        headerTitle.textContent = "Goals";
+    }
 }
 
 function setupNavigation() {
@@ -38,10 +64,14 @@ function setupNavigation() {
     document.getElementById('back-btn').addEventListener('click', () => navigateTo('view-dashboard'));
 }
 
-function getTodayString() {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function updateLogDateLabel() {
+    const el = document.getElementById('log-date-label');
+    if (!el) return;
+    const today = getTodayString();
+    el.textContent = selectedDate === today ? 'Today' : formatDateDisplay(selectedDate);
 }
+
+// ── Goals ──────────────────────────────────────────────────────────────────────
 
 async function getGoals() {
     const [cals, protein, carbs, fats] = await Promise.all([
@@ -56,28 +86,148 @@ async function getGoals() {
     };
 }
 
-// ── FOOD SEARCH (local database — no API or internet required) ────────────────
+// ── Calendar ───────────────────────────────────────────────────────────────────
+
+async function setupCalendar() {
+    // Sync calendar display month with today on first load
+    const today = new Date();
+    calendarYear  = today.getFullYear();
+    calendarMonth = today.getMonth();
+
+    await refreshCalendar();
+
+    document.getElementById('cal-prev').addEventListener('click', async () => {
+        calendarMonth--;
+        if (calendarMonth < 0) { calendarMonth = 11; calendarYear--; }
+        await refreshCalendar();
+    });
+    document.getElementById('cal-next').addEventListener('click', async () => {
+        calendarMonth++;
+        if (calendarMonth > 11) { calendarMonth = 0; calendarYear++; }
+        await refreshCalendar();
+    });
+    document.getElementById('cal-today-btn').addEventListener('click', async () => {
+        const today = new Date();
+        calendarYear  = today.getFullYear();
+        calendarMonth = today.getMonth();
+        await selectDate(getTodayString());
+    });
+}
+
+async function refreshCalendar() {
+    // Load calorie totals for every day in the displayed month
+    const ym = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`;
+    const meals = await getMealsByMonth(ym);
+    monthCalData = {};
+    for (const m of meals) {
+        monthCalData[m.date] = (monthCalData[m.date] || 0) + m.calories;
+    }
+    renderCalendar();
+    await updateDashboard();
+}
+
+const MONTH_NAMES = ['January','February','March','April','May','June',
+                     'July','August','September','October','November','December'];
+
+function renderCalendar() {
+    const grid  = document.getElementById('cal-grid');
+    const label = document.getElementById('cal-month-label');
+    label.textContent = `${MONTH_NAMES[calendarMonth]} ${calendarYear}`;
+
+    grid.innerHTML = '';
+
+    // Day-of-week headers (Mon-first)
+    ['Mo','Tu','We','Th','Fr','Sa','Su'].forEach(d => {
+        const h = document.createElement('div');
+        h.className = 'cal-day-name';
+        h.textContent = d;
+        grid.appendChild(h);
+    });
+
+    // Empty leading cells
+    const firstDow = new Date(calendarYear, calendarMonth, 1).getDay(); // 0=Sun
+    const offset   = (firstDow + 6) % 7; // shift to Mon-start
+    for (let i = 0; i < offset; i++) {
+        const e = document.createElement('div');
+        e.className = 'cal-empty';
+        grid.appendChild(e);
+    }
+
+    const daysInMonth = new Date(calendarYear, calendarMonth + 1, 0).getDate();
+    const today       = getTodayString();
+
+    for (let d = 1; d <= daysInMonth; d++) {
+        const mm  = String(calendarMonth + 1).padStart(2, '0');
+        const dd  = String(d).padStart(2, '0');
+        const dateStr = `${calendarYear}-${mm}-${dd}`;
+
+        const cell = document.createElement('div');
+        cell.className = 'cal-day';
+        if (dateStr === today)         cell.classList.add('today');
+        if (dateStr === selectedDate)  cell.classList.add('selected');
+
+        const numEl = document.createElement('span');
+        numEl.className = 'cal-day-num';
+        numEl.textContent = d;
+        cell.appendChild(numEl);
+
+        const cals = monthCalData[dateStr];
+        if (cals) {
+            const calEl = document.createElement('span');
+            calEl.className = 'cal-day-cal';
+            calEl.textContent = cals >= 1000 ? `${(cals/1000).toFixed(1)}k` : cals;
+            cell.appendChild(calEl);
+            cell.classList.add('has-data');
+        }
+
+        cell.addEventListener('click', () => selectDate(dateStr));
+        grid.appendChild(cell);
+    }
+}
+
+async function selectDate(dateStr) {
+    selectedDate = dateStr;
+
+    // Sync calendar display month if needed
+    const parts = dateStr.split('-');
+    const y = parseInt(parts[0]), m = parseInt(parts[1]) - 1;
+    if (y !== calendarYear || m !== calendarMonth) {
+        calendarYear = y; calendarMonth = m;
+        const ym = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`;
+        const meals = await getMealsByMonth(ym);
+        monthCalData = {};
+        for (const meal of meals) monthCalData[meal.date] = (monthCalData[meal.date] || 0) + meal.calories;
+    }
+
+    renderCalendar();
+    const today = getTodayString();
+    headerTitle.textContent = dateStr === today ? "Today's Overview" : formatDateDisplay(dateStr);
+    await updateDashboard();
+}
+
+// ── Food Search (local DB + Open Food Facts fallback) ──────────────────────────
 
 function setupFoodSearch() {
     const searchInput   = document.getElementById('food-search-input');
     const dropdown      = document.getElementById('food-search-results');
-    const confirmPanel  = document.getElementById('food-confirm-panel');
-    const confirmName   = document.getElementById('confirm-food-name');
-    const confirmCal    = document.getElementById('confirm-food-cal');
-    const confirmMacros = document.getElementById('confirm-food-macros');
-    const confirmSrv    = document.getElementById('confirm-srv-label');
-    const qtyInput      = document.getElementById('confirm-qty');
+    const qtyInput      = document.getElementById('food-qty');
     const qtyMinus      = document.getElementById('qty-minus');
     const qtyPlus       = document.getElementById('qty-plus');
-    const addBtn        = document.getElementById('confirm-add-btn');
-    const cancelBtn     = document.getElementById('confirm-cancel-btn');
+    const qtyUnit       = document.getElementById('qty-unit-label');
+    const nutPreview    = document.getElementById('nutrition-preview');
+    const addBtn        = document.getElementById('add-meal-btn');
     const onlineBtn     = document.getElementById('search-online-btn');
 
     let selectedFood = null;
     let debounce = null;
 
+    // ── Search input ──
     searchInput.addEventListener('input', () => {
         clearTimeout(debounce);
+        selectedFood = null;
+        qtyUnit.textContent = 'serving';
+        nutPreview.classList.add('hidden');
+        addBtn.disabled = true;
         debounce = setTimeout(() => {
             const q = searchInput.value.trim();
             if (q.length < 2) { hideDropdown(); return; }
@@ -87,30 +237,34 @@ function setupFoodSearch() {
 
     searchInput.addEventListener('focus', () => {
         const q = searchInput.value.trim();
-        if (q.length >= 2) renderDropdown(searchFoods(q));
+        if (q.length >= 2 && !selectedFood) renderDropdown(searchFoods(q));
     });
 
     document.addEventListener('click', (e) => {
         if (!e.target.closest('.search-wrapper')) hideDropdown();
     });
 
+    // ── Dropdown ──
     function renderDropdown(foods) {
         dropdown.innerHTML = '';
         if (foods.length === 0) {
             const msg = document.createElement('div');
             msg.className = 'food-no-result';
-            msg.textContent = 'No results — try "Search Online" below for packaged or rare foods.';
+            msg.textContent = 'No results — try "Search Online" for packaged foods.';
             dropdown.appendChild(msg);
         } else {
             foods.forEach(food => {
                 const item = document.createElement('div');
                 item.className = 'food-result-item';
+
                 const nameEl = document.createElement('span');
                 nameEl.className = 'food-result-name';
                 nameEl.textContent = food.n;
+
                 const rightEl = document.createElement('span');
                 rightEl.className = 'food-result-right';
                 rightEl.innerHTML = `<b>${food.c}</b> cal<br><small>${food.s}</small>`;
+
                 item.appendChild(nameEl);
                 item.appendChild(rightEl);
                 item.addEventListener('mousedown', e => { e.preventDefault(); selectFood(food); });
@@ -126,29 +280,42 @@ function setupFoodSearch() {
         selectedFood = food;
         searchInput.value = food.n;
         hideDropdown();
-        confirmName.textContent = food.n;
-        confirmCal.textContent = `${food.c} cal per serving`;
-        confirmMacros.textContent = `Protein: ${food.p}g  •  Carbs: ${food.cb}g  •  Fat: ${food.f}g`;
-        confirmSrv.textContent = food.s;
-        qtyInput.value = '1';
-        confirmPanel.classList.remove('hidden');
-        confirmPanel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        qtyUnit.textContent = food.s;
+        addBtn.disabled = false;
+        updateNutritionPreview();
+        qtyInput.focus();
     }
 
+    // ── Quantity controls ──
     qtyMinus.addEventListener('click', () => {
         const v = parseFloat(qtyInput.value) || 1;
         qtyInput.value = Math.max(0.5, parseFloat((v - 0.5).toFixed(1)));
+        updateNutritionPreview();
     });
     qtyPlus.addEventListener('click', () => {
         const v = parseFloat(qtyInput.value) || 1;
         qtyInput.value = Math.min(20, parseFloat((v + 0.5).toFixed(1)));
+        updateNutritionPreview();
     });
+    qtyInput.addEventListener('input', updateNutritionPreview);
 
+    function updateNutritionPreview() {
+        if (!selectedFood) { nutPreview.classList.add('hidden'); return; }
+        const qty = Math.max(0.5, parseFloat(qtyInput.value) || 1);
+        const cal = Math.round(selectedFood.c * qty);
+        const p   = Math.round(selectedFood.p * qty);
+        const cb  = Math.round(selectedFood.cb * qty);
+        const f   = Math.round(selectedFood.f * qty);
+        nutPreview.textContent = `${cal} cal  •  P: ${p}g  •  C: ${cb}g  •  F: ${f}g`;
+        nutPreview.classList.remove('hidden');
+    }
+
+    // ── Add to Log ──
     addBtn.addEventListener('click', async () => {
         if (!selectedFood) return;
         const qty = Math.max(0.5, parseFloat(qtyInput.value) || 1);
         await saveMeal({
-            date:     getTodayString(),
+            date:     selectedDate,
             name:     qty === 1 ? selectedFood.n : `${selectedFood.n} ×${qty}`,
             calories: Math.round(selectedFood.c * qty),
             protein:  Math.round(selectedFood.p * qty),
@@ -157,20 +324,27 @@ function setupFoodSearch() {
             image:    null,
             status:   'database'
         });
+        // Refresh month data so calendar dot updates immediately
+        const ym = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`;
+        const allMeals = await getMealsByMonth(ym);
+        monthCalData = {};
+        for (const m of allMeals) monthCalData[m.date] = (monthCalData[m.date] || 0) + m.calories;
+
         resetSearch();
         navigateTo('view-dashboard');
     });
 
-    cancelBtn.addEventListener('click', resetSearch);
-
     function resetSearch() {
         selectedFood = null;
         searchInput.value = '';
-        confirmPanel.classList.add('hidden');
+        qtyInput.value = '1';
+        qtyUnit.textContent = 'serving';
+        nutPreview.classList.add('hidden');
+        addBtn.disabled = true;
         hideDropdown();
     }
 
-    // Online fallback — Open Food Facts (completely free, no API key)
+    // ── Online fallback (Open Food Facts — free, no key) ──
     onlineBtn.addEventListener('click', async () => {
         const q = searchInput.value.trim();
         if (!q) { searchInput.focus(); return; }
@@ -180,12 +354,12 @@ function setupFoodSearch() {
         try {
             const results = await searchOpenFoodFacts(q);
             if (results.length === 0) {
-                alert(`No online results found for "${q}".\nTry a simpler search term.`);
+                alert(`No online results for "${q}".\nTry a simpler search term.`);
             } else {
                 renderDropdown(results);
             }
         } catch {
-            alert('Online search failed. Check your internet connection and try again.');
+            alert('Online search failed. Check your internet connection.');
         } finally {
             onlineBtn.textContent = orig;
             onlineBtn.disabled = false;
@@ -216,144 +390,14 @@ async function searchOpenFoodFacts(query) {
         .slice(0, 8);
 }
 
-// ── CAMERA & AI PHOTO ANALYSIS (Gemini — optional, free) ─────────────────────
-
-function setupCamera() {
-    const cameraInput      = document.getElementById('camera-input');
-    const imagePreview     = document.getElementById('image-preview');
-    const previewContainer = document.getElementById('image-preview-container');
-    const analyzeBtn       = document.getElementById('analyze-btn');
-
-    cameraInput.addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                const MAX_W = 600;
-                const scale = Math.min(MAX_W / img.width, 1);
-                canvas.width  = img.width  * scale;
-                canvas.height = img.height * scale;
-                canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                currentImageBase64 = canvas.toDataURL('image/jpeg', 0.7);
-                imagePreview.src = currentImageBase64;
-                previewContainer.classList.remove('hidden');
-                analyzeBtn.textContent = 'Analyze with AI';
-                analyzeBtn.disabled = false;
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    });
-
-    analyzeBtn.addEventListener('click', async () => {
-        const apiKey = await getSetting('gemini_key');
-        if (!apiKey) {
-            alert('AI photo analysis requires a free Gemini API key.\n\nGo to Config tab → enter your key → Save Key.\nGet a free key at: aistudio.google.com\n\n(Text search in the section above works without any API key.)');
-            return;
-        }
-        analyzeBtn.textContent = 'Analyzing…';
-        analyzeBtn.disabled = true;
-        try {
-            const base64Data = currentImageBase64.split(',')[1];
-            const prompt = 'You are a nutritionist. Analyze this food image and estimate nutritional content. Return ONLY valid JSON: {"name":"Food Name","calories":0,"protein":0,"carbs":0,"fats":0}. All numeric values must be integers in grams or kcal.';
-            const raw = await callGemini(apiKey, prompt, base64Data);
-            await saveMeal({ date: getTodayString(), ...sanitizeMeal(raw, 'Unknown Food'), image: currentImageBase64, status: 'ai-analyzed' });
-            currentImageBase64 = null;
-            previewContainer.classList.add('hidden');
-            cameraInput.value = '';
-            navigateTo('view-dashboard');
-        } catch (err) {
-            console.error('AI analysis error:', err);
-            alert(`AI analysis failed: ${err.message}\n\nTip: Use "Test Key" in Config to verify your API key.`);
-            analyzeBtn.textContent = 'Analyze with AI';
-            analyzeBtn.disabled = false;
-        }
-    });
-}
-
-// ── GEMINI (used only for AI photo analysis) ──────────────────────────────────
-
-async function callGemini(apiKey, prompt, imageBase64 = null) {
-    const parts = [{ text: prompt }];
-    if (imageBase64) parts.push({ inline_data: { mime_type: 'image/jpeg', data: imageBase64 } });
-    const body = JSON.stringify({
-        contents: [{ parts }],
-        generationConfig: { responseMimeType: 'application/json' }
-    });
-    const models = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'];
-    let lastError;
-    for (const model of models) {
-        const res = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-            { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }
-        );
-        const data = await res.json();
-        if (data.error) {
-            lastError = new Error(data.error.message);
-            if (data.error.code === 404 || (data.error.status || '').includes('NOT_FOUND')) continue;
-            throw lastError;
-        }
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (!text) throw new Error('Empty response from Gemini. Try again.');
-        return JSON.parse(text);
-    }
-    throw lastError;
-}
-
-function sanitizeMeal(raw, fallbackName) {
-    return {
-        name:     String(raw.name || fallbackName).slice(0, 120),
-        calories: Math.max(0, Math.round(Number(raw.calories) || 0)),
-        protein:  Math.max(0, Math.round(Number(raw.protein)  || 0)),
-        carbs:    Math.max(0, Math.round(Number(raw.carbs)    || 0)),
-        fats:     Math.max(0, Math.round(Number(raw.fats)     || 0))
-    };
-}
-
-// ── SETTINGS ──────────────────────────────────────────────────────────────────
+// ── Settings (goals only) ──────────────────────────────────────────────────────
 
 function setupSettings() {
-    const keyInput  = document.getElementById('api-key-input');
-    const statusMsg = document.getElementById('settings-status');
-    const goalIds   = ['goal-calories', 'goal-protein', 'goal-carbs', 'goal-fats'];
-    const goalKeys  = ['goal_calories', 'goal_protein', 'goal_carbs', 'goal_fats'];
+    const goalIds  = ['goal-calories', 'goal-protein', 'goal-carbs', 'goal-fats'];
+    const goalKeys = ['goal_calories', 'goal_protein', 'goal_carbs', 'goal_fats'];
 
-    getSetting('gemini_key').then(k => { if (k) keyInput.value = '••••••••••••••••••••'; });
     Promise.all(goalKeys.map(k => getSetting(k))).then(vals => {
         vals.forEach((v, i) => { if (v) document.getElementById(goalIds[i]).value = v; });
-    });
-
-    document.getElementById('save-settings-btn').addEventListener('click', async () => {
-        const key = keyInput.value.trim();
-        if (key && !key.startsWith('••••')) {
-            await saveSetting('gemini_key', key);
-            statusMsg.textContent = 'API key saved!';
-            statusMsg.style.color = '#34C759';
-        }
-    });
-
-    document.getElementById('test-key-btn').addEventListener('click', async () => {
-        const stored = await getSetting('gemini_key');
-        const typed  = keyInput.value.trim();
-        const key = (typed && !typed.startsWith('••••')) ? typed : stored;
-        if (!key) { statusMsg.textContent = 'Enter and save your API key first.'; statusMsg.style.color = '#FF4060'; return; }
-        statusMsg.textContent = 'Testing connection…';
-        statusMsg.style.color = 'var(--muted)';
-        try {
-            const result = await callGemini(key, 'Return ONLY this exact JSON: {"name":"test","calories":100,"protein":5,"carbs":10,"fats":3}');
-            if (result && result.calories !== undefined) {
-                statusMsg.textContent = '✓ API key works! AI photo analysis is ready.';
-                statusMsg.style.color = '#34C759';
-            } else {
-                throw new Error('Unexpected response format.');
-            }
-        } catch (err) {
-            statusMsg.textContent = `✗ Failed: ${err.message}`;
-            statusMsg.style.color = '#FF4060';
-        }
     });
 
     document.getElementById('save-goals-btn').addEventListener('click', async () => {
@@ -364,21 +408,29 @@ function setupSettings() {
         const gs = document.getElementById('goals-status');
         gs.textContent = 'Goals saved!';
         gs.style.color = '#34C759';
+        setTimeout(() => { gs.textContent = ''; }, 2000);
     });
 }
 
-// ── DASHBOARD ──────────────────────────────────────────────────────────────────
+// ── Dashboard ──────────────────────────────────────────────────────────────────
 
 async function updateDashboard() {
-    const [meals, goals] = await Promise.all([getMealsByDate(getTodayString()), getGoals()]);
+    const [meals, goals] = await Promise.all([getMealsByDate(selectedDate), getGoals()]);
     const container = document.getElementById('meals-list');
     let c = 0, p = 0, cb = 0, f = 0;
+
+    // Update date display chip in dashboard
+    const chipEl = document.getElementById('dashboard-date-chip');
+    if (chipEl) {
+        const today = getTodayString();
+        chipEl.textContent = selectedDate === today ? 'Today' : formatDateDisplay(selectedDate);
+    }
 
     container.innerHTML = '';
     if (meals.length === 0) {
         const empty = document.createElement('p');
         empty.className = 'empty-state';
-        empty.textContent = 'No meals logged today. Tap Log to add one!';
+        empty.textContent = 'No meals logged for this day. Tap Log to add one!';
         container.appendChild(empty);
     } else {
         meals.forEach(m => {
@@ -390,10 +442,13 @@ async function updateDashboard() {
     document.getElementById('calories-consumed').textContent = c;
     const pct = Math.min((c / goals.calories) * 100, 100);
     document.getElementById('calorie-ring').style.background =
-        `conic-gradient(var(--primary) ${pct}%, #E5E5EA ${pct}%)`;
+        `conic-gradient(var(--primary) ${pct}%, #1a1a3a ${pct}%)`;
     updateMacroRow('.protein-fill', p,  goals.protein);
     updateMacroRow('.carbs-fill',   cb, goals.carbs);
     updateMacroRow('.fats-fill',    f,  goals.fats);
+
+    // Re-render calendar to keep selection in sync
+    renderCalendar();
 }
 
 function createMealCard(m) {
@@ -401,16 +456,8 @@ function createMealCard(m) {
     row.className = 'card meal-card';
 
     const thumb = document.createElement('div');
-    thumb.className = 'meal-thumb';
-    if (m.image) {
-        const img = document.createElement('img');
-        img.src = m.image;
-        img.alt = '';
-        thumb.appendChild(img);
-    } else {
-        thumb.classList.add('meal-thumb-placeholder');
-        thumb.textContent = '🍽️';
-    }
+    thumb.className = 'meal-thumb meal-thumb-placeholder';
+    thumb.textContent = '🍽️';
 
     const info = document.createElement('div');
     info.className = 'meal-info';
@@ -439,7 +486,15 @@ function createMealCard(m) {
     del.textContent = '✕';
     del.title = 'Delete';
     del.addEventListener('click', async () => {
-        if (m.id !== undefined) { await deleteMeal(m.id); updateDashboard(); }
+        if (m.id !== undefined) {
+            await deleteMeal(m.id);
+            // Refresh month data
+            const ym = `${calendarYear}-${String(calendarMonth + 1).padStart(2, '0')}`;
+            const allMeals = await getMealsByMonth(ym);
+            monthCalData = {};
+            for (const meal of allMeals) monthCalData[meal.date] = (monthCalData[meal.date] || 0) + meal.calories;
+            await updateDashboard();
+        }
     });
 
     row.appendChild(thumb);

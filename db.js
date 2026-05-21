@@ -44,6 +44,16 @@ function getMealsByDate(dateString) {
     });
 }
 
+function getMealsByMonth(yearMonth) {
+    // yearMonth: "YYYY-MM"
+    return new Promise((resolve, reject) => {
+        const tx = db.transaction(['meals'], 'readonly');
+        tx.onerror = (e) => reject(e.target.error);
+        const range = IDBKeyRange.bound(yearMonth + '-01', yearMonth + '-31');
+        tx.objectStore('meals').index('date').getAll(range).onsuccess = (e) => resolve(e.target.result);
+    });
+}
+
 function saveSetting(key, value) {
     return new Promise((resolve, reject) => {
         const tx = db.transaction(['settings'], 'readwrite');
